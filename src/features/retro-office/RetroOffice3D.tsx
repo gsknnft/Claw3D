@@ -3110,7 +3110,8 @@ export function RetroOffice3D({
     phoneBoothImmersive ||
     githubImmersive ||
     qaImmersive ||
-    standupImmersive;
+    standupImmersive ||
+    kanbanImmersive;
   const compactRosterAgents = useMemo(
     () => agents.slice(0, COMPACT_AGENT_BADGE_LIMIT),
     [agents],
