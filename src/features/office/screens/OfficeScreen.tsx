@@ -837,6 +837,7 @@ export function OfficeScreen({
   );
   const {
     client,
+    provider,
     status,
     connectPromptReady,
     shouldPromptForConnect,
@@ -858,6 +859,7 @@ export function OfficeScreen({
   const runtimeSupportsSkills = supportsCapability("skills");
   const runtimeSupportsApprovals = supportsCapability("approvals");
   const runtimeSupportsCron = supportsCapability("cron");
+  const runtimeSupportsModels = supportsCapability("models");
   const runtimeSupportsRunLifecycle = supportsCapability("runtime-agent-events");
   const { state, dispatch, hydrateAgents, setError, setLoading } =
     useAgentStore();
@@ -1139,14 +1141,33 @@ export function OfficeScreen({
     },
     [dispatch, gatewayUrl, settingsCoordinator],
   );
+  const focusLocalAgent = useCallback(
+    (agentId: string, options?: { openChat?: boolean }) => {
+      setSelectedChatAgentId(agentId);
+      if (options?.openChat !== false) {
+        setChatOpen(true);
+      }
+      dispatch({ type: "selectAgent", agentId });
+    },
+    [dispatch],
+  );
+  const focusChatTarget = useCallback(
+    (agentId: string) => {
+      setSelectedChatAgentId(agentId);
+      setChatOpen(true);
+      if (!isRemoteOfficeAgentId(agentId)) {
+        dispatch({ type: "selectAgent", agentId });
+      }
+    },
+    [dispatch],
+  );
   const openAgentEditor = useCallback(
     (agentId: string, initialSection: AgentEditorSection = "avatar") => {
       setAgentEditorAgentId(agentId);
       setAgentEditorInitialSection(initialSection);
-      setSelectedChatAgentId(agentId);
-      dispatch({ type: "selectAgent", agentId });
+      focusLocalAgent(agentId, { openChat: false });
     },
-    [dispatch],
+    [focusLocalAgent],
   );
 
   const handleDeskAssignmentChange = useCallback(
@@ -1363,7 +1384,7 @@ export function OfficeScreen({
             ? { force: true }
             : { maxAgeMs: options?.settingsMaxAgeMs ?? 60_000 };
         const commands = await runStudioBootstrapLoadOperation({
-          client,
+          client: provider,
           gatewayUrl,
           cachedConfigSnapshot: gatewayConfigSnapshot.current,
           loadStudioSettings: () => loadStudioSettings(settingsLoadOptions),
@@ -1399,7 +1420,7 @@ export function OfficeScreen({
           }
           try {
             const inference = await inferRunningFromAgentSessions({
-              client,
+              client: provider,
               agentId: agent.agentId,
             });
             if (connectionEpochAtStart !== connectionEpochRef.current) {
@@ -1782,8 +1803,7 @@ export function OfficeScreen({
           persistSnapshot: persistCompanyBuilderSnapshot,
           setOfficeTitle,
           selectAgent: (agentId) => {
-            dispatch({ type: "selectAgent", agentId });
-            setSelectedChatAgentId(agentId);
+            focusLocalAgent(agentId);
           },
           setStatusLine: setCompanyBuilderStatusLine,
         });
@@ -1897,11 +1917,7 @@ export function OfficeScreen({
                 );
               }
             }
-            dispatch({
-              type: "selectAgent",
-              agentId: completion.agentId,
-            });
-            setSelectedChatAgentId(completion.agentId);
+            focusLocalAgent(completion.agentId);
             setCreateAgentBlock(null);
             setCreateAgentModalError(null);
           },
@@ -1921,6 +1937,7 @@ export function OfficeScreen({
       createAgentBusy,
       dispatch,
       enqueueConfigMutation,
+      focusLocalAgent,
       hasDeleteMutationBlock,
       loadAgents,
       setError,
@@ -2115,7 +2132,7 @@ export function OfficeScreen({
       const requestedSessionKey = params.sessionKey?.trim() ?? "";
       if (requestedSessionKey) {
         try {
-          const history = await client.call<{
+          const history = await provider.call<{
             messages?: Record<string, unknown>[];
           }>("chat.history", {
             sessionKey: requestedSessionKey,
@@ -2127,7 +2144,7 @@ export function OfficeScreen({
           const derived = buildHistoryLines(messages);
           let lastUser = derived.lastUser?.trim() ?? "";
           if (!lastUser) {
-            const previewResult = await client.call<SummaryPreviewSnapshot>(
+            const previewResult = await provider.call<SummaryPreviewSnapshot>(
               "sessions.preview",
               {
                 keys: [requestedSessionKey],
@@ -2223,7 +2240,7 @@ export function OfficeScreen({
         return;
       }
       const commands = await runHistorySyncOperation({
-        client,
+        client: provider,
         agentId: params.agentId,
         getAgent: (agentId) =>
           stateRef.current.agents.find((entry) => entry.agentId === agentId) ??
@@ -2249,7 +2266,7 @@ export function OfficeScreen({
         });
       }
     },
-    [client, debugEnabled, dispatch, status],
+    [debugEnabled, dispatch, provider, status],
   );
 
   const refreshRecentTransportSessionHistory = useCallback(
@@ -2612,10 +2629,11 @@ export function OfficeScreen({
 
   useEffect(() => {
     if (status !== "connected") return;
+    if (!runtimeSupportsModels) return;
     let cancelled = false;
     void (async () => {
       try {
-        const result = await client.call<{ models: GatewayModelChoice[] }>(
+        const result = await provider.call<{ models: GatewayModelChoice[] }>(
           "models.list",
           {},
         );
@@ -2634,7 +2652,7 @@ export function OfficeScreen({
     return () => {
       cancelled = true;
     };
-  }, [status, client]);
+  }, [status, provider, runtimeSupportsModels]);
 
   useEffect(() => {
     if (chatOpen && !selectedChatAgentId && state.agents.length > 0) {
@@ -2648,7 +2666,7 @@ export function OfficeScreen({
   );
 
   const chatController = useChatInteractionController({
-    client,
+    client: provider,
     status,
     agents: state.agents,
     dispatch: (action) => dispatch(action as never),
@@ -2881,9 +2899,8 @@ export function OfficeScreen({
 
   useEffect(() => {
     if (!activeGithubReviewAgentId) return;
-    setSelectedChatAgentId(activeGithubReviewAgentId);
-    dispatch({ type: "selectAgent", agentId: activeGithubReviewAgentId });
-  }, [activeGithubReviewAgentId, dispatch]);
+    focusLocalAgent(activeGithubReviewAgentId);
+  }, [activeGithubReviewAgentId, focusLocalAgent]);
 
   useEffect(() => {
     setQaTestingAgentId(activeQaTestingAgentId);
@@ -2891,9 +2908,8 @@ export function OfficeScreen({
 
   useEffect(() => {
     if (!activeQaTestingAgentId) return;
-    setSelectedChatAgentId(activeQaTestingAgentId);
-    dispatch({ type: "selectAgent", agentId: activeQaTestingAgentId });
-  }, [activeQaTestingAgentId, dispatch]);
+    focusLocalAgent(activeQaTestingAgentId);
+  }, [activeQaTestingAgentId, focusLocalAgent]);
 
   useEffect(() => {
     const activeKeys = new Set(
@@ -2947,9 +2963,7 @@ export function OfficeScreen({
             promptedPhoneCallKeysRef.current.delete(request.key);
             return;
           }
-          setSelectedChatAgentId(agentId);
-          setChatOpen(true);
-          dispatch({ type: "selectAgent", agentId });
+          focusLocalAgent(agentId);
           dispatch({
             type: "appendOutput",
             agentId,
@@ -3007,7 +3021,7 @@ export function OfficeScreen({
         prepareScenarioForAgent(agentId, request);
       }
     }
-  }, [dispatch, phoneCallByAgentId, state.agents]);
+  }, [dispatch, focusLocalAgent, phoneCallByAgentId, state.agents]);
 
   const activePhoneBoothAgentId = useMemo(
     () =>
@@ -3029,10 +3043,9 @@ export function OfficeScreen({
     ({ agentId, requestKey }: PhoneCallSpeakPayload) => {
       if (spokenPhoneCallKeysRef.current.has(requestKey)) return;
       spokenPhoneCallKeysRef.current.add(requestKey);
-      setSelectedChatAgentId(agentId);
-      dispatch({ type: "selectAgent", agentId });
+      focusLocalAgent(agentId);
     },
-    [dispatch],
+    [focusLocalAgent],
   );
 
   const handlePhoneCallComplete = useCallback(
@@ -3110,9 +3123,7 @@ export function OfficeScreen({
             promptedTextMessageKeysRef.current.delete(request.key);
             return;
           }
-          setSelectedChatAgentId(agentId);
-          setChatOpen(true);
-          dispatch({ type: "selectAgent", agentId });
+          focusLocalAgent(agentId);
           dispatch({
             type: "appendOutput",
             agentId,
@@ -3170,7 +3181,7 @@ export function OfficeScreen({
         prepareScenarioForAgent(agentId, request);
       }
     }
-  }, [dispatch, state.agents, textMessageByAgentId]);
+  }, [dispatch, focusLocalAgent, state.agents, textMessageByAgentId]);
 
   const activeSmsBoothAgentId = useMemo(
     () =>
@@ -3237,13 +3248,9 @@ export function OfficeScreen({
 
   const handleOpenAgentChat = useCallback(
     (agentId: string) => {
-      setSelectedChatAgentId(agentId);
-      setChatOpen(true);
-      if (!isRemoteOfficeAgentId(agentId)) {
-        dispatch({ type: "selectAgent", agentId });
-      }
+      focusChatTarget(agentId);
     },
-    [dispatch],
+    [focusChatTarget],
   );
   const updateRemoteChatSession = useCallback(
     (
@@ -4255,8 +4262,7 @@ export function OfficeScreen({
           onMonitorSelect={(agentId) => {
             setMonitorAgentId(agentId);
             if (agentId && !isRemoteOfficeAgentId(agentId)) {
-              setSelectedChatAgentId(agentId);
-              dispatch({ type: "selectAgent", agentId });
+              focusLocalAgent(agentId, { openChat: false });
             }
           }}
           onAgentChatSelect={(agentId) => {

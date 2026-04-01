@@ -20,6 +20,7 @@ import type {
 import { resolveStudioProxyGatewayUrl } from "@/lib/gateway/proxy-url";
 import { ensureGatewayReloadModeHotForLocalStudio } from "@/lib/gateway/gatewayReloadMode";
 import { GatewayResponseError } from "@/lib/gateway/errors";
+import { probeCustomRuntime } from "@/lib/runtime/custom/http";
 
 export type ReqFrame = {
   type: "req";
@@ -679,10 +680,20 @@ export const useGatewayConnection = (
     setConnectErrorCode(null);
     wasManualDisconnectRef.current = false;
     if (selectedAdapterType === "custom") {
-      setConnectErrorCode("studio.custom_runtime_unimplemented");
-      setError(
-        "Custom backend selection is scaffolded, but direct HTTP runtime flows are not wired into Studio yet. Keep using OpenClaw or Hermes here until the custom runtime client lands."
-      );
+      setStatus("connecting");
+      try {
+        await settingsCoordinator.flushPending();
+        await probeCustomRuntime(gatewayUrl);
+        setDetectedAdapterType("custom");
+        setStatus("connected");
+        setConnectErrorCode(null);
+        retryAttemptRef.current = 0;
+      } catch (err) {
+        setStatus("disconnected");
+        setDetectedAdapterType(null);
+        setConnectErrorCode("studio.custom_runtime_probe_failed");
+        setError(formatGatewayError(err));
+      }
       return;
     }
     try {
@@ -796,9 +807,14 @@ export const useGatewayConnection = (
     setError(null);
     setConnectErrorCode(null);
     wasManualDisconnectRef.current = true;
+    setDetectedAdapterType(null);
+    if (selectedAdapterType === "custom") {
+      setStatus("disconnected");
+      return;
+    }
     client.disconnect();
     clearGatewayBrowserSessionStorage();
-  }, [client]);
+  }, [client, selectedAdapterType]);
 
   const clearError = useCallback(() => {
     setError(null);

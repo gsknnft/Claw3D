@@ -219,6 +219,7 @@ const AgentsPageScreen = () => {
   const [settingsCoordinator] = useState(() => createStudioSettingsCoordinator());
   const {
     client,
+    provider,
     status,
     connectPromptReady,
     shouldPromptForConnect,
@@ -511,7 +512,7 @@ const AgentsPageScreen = () => {
     setLoading(true);
     try {
       const commands = await runStudioBootstrapLoadOperation({
-        client,
+        client: provider,
         gatewayUrl,
         cachedConfigSnapshot: gatewayConfigSnapshot,
         loadStudioSettings,
@@ -535,6 +536,7 @@ const AgentsPageScreen = () => {
     }
   }, [
     client,
+    provider,
     dispatch,
     hydrateAgents,
     setError,
@@ -801,7 +803,7 @@ const AgentsPageScreen = () => {
     loadMoreAgentHistory,
     clearHistoryInFlight,
   } = useRuntimeSyncController({
-    client,
+    client: provider,
     status,
     agents,
     focusedAgentId,
@@ -824,7 +826,7 @@ const AgentsPageScreen = () => {
     queueLivePatch,
     clearPendingLivePatch,
   } = useChatInteractionController({
-    client,
+    client: provider,
     status,
     agents,
     dispatch,

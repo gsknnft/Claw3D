@@ -73,14 +73,15 @@ const setupAndImportHook = async (gatewayUrl: string | null) => {
     }) => {
       gatewayUrl: string;
       token: string;
-      selectedAdapterType: "openclaw" | "hermes" | "demo";
-      detectedAdapterType: "openclaw" | "hermes" | "demo" | null;
-      activeAdapterType: "openclaw" | "hermes" | "demo";
+      selectedAdapterType: "openclaw" | "hermes" | "demo" | "custom";
+      detectedAdapterType: "openclaw" | "hermes" | "demo" | "custom" | null;
+      activeAdapterType: "openclaw" | "hermes" | "demo" | "custom";
       localGatewayDefaults: {
         url: string;
         token: string;
-        adapterType: "openclaw" | "hermes" | "demo";
+        adapterType: "openclaw" | "hermes" | "demo" | "custom";
       } | null;
+      shouldPromptForConnect: boolean;
       useLocalGatewayDefaults: () => void;
     },
     captured,
@@ -326,5 +327,58 @@ describe("useGatewayConnection", () => {
       expect(screen.getByTestId("activeAdapterType")).toHaveTextContent("hermes");
     });
     expect(patches).toEqual([]);
+  });
+
+  it("loads_custom_adapter_type_without_requiring_a_token", async () => {
+    const { useGatewayConnection } = await setupAndImportHook(null);
+    const coordinator = {
+      loadSettingsEnvelope: async () => ({
+        settings: {
+          version: 1,
+          gateway: {
+            url: "http://127.0.0.1:7770",
+            token: "",
+            adapterType: "custom",
+          },
+          focused: {},
+          avatars: {},
+          analytics: {},
+          voiceReplies: {},
+          office: {},
+          deskAssignments: {},
+          standup: {},
+          taskBoard: {},
+        },
+        localGatewayDefaults: null,
+      }),
+      loadSettings: async () => null,
+      schedulePatch: () => {},
+      flushPending: async () => {},
+    };
+
+    const Probe = () => {
+      const state = useGatewayConnection(coordinator);
+      return createElement(
+        "div",
+        null,
+        createElement("div", { "data-testid": "gatewayUrl" }, state.gatewayUrl),
+        createElement("div", { "data-testid": "selectedAdapterType" }, state.selectedAdapterType),
+        createElement("div", { "data-testid": "activeAdapterType" }, state.activeAdapterType),
+        createElement(
+          "div",
+          { "data-testid": "shouldPromptForConnect" },
+          state.shouldPromptForConnect ? "yes" : "no"
+        )
+      );
+    };
+
+    render(createElement(Probe));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("gatewayUrl")).toHaveTextContent("http://127.0.0.1:7770");
+    });
+    expect(screen.getByTestId("selectedAdapterType")).toHaveTextContent("custom");
+    expect(screen.getByTestId("activeAdapterType")).toHaveTextContent("custom");
+    expect(screen.getByTestId("shouldPromptForConnect")).toHaveTextContent("no");
   });
 });
