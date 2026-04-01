@@ -1580,7 +1580,7 @@ export function OfficeScreen({
   const runCompanyBuilderAiTask = useCallback(
     async (prompt: string, statusText: string) => {
       if (status !== "connected") {
-        throw new Error("Connect to OpenClaw before using the company builder.");
+        throw new Error("Connect to a runtime before using the company builder.");
       }
       const livePlannerAgent = resolveCompanyPlanningAgent({
         agents: stateRef.current.agents,
@@ -1608,7 +1608,7 @@ export function OfficeScreen({
       try {
         const improvedBrief = await runCompanyBuilderAiTask(
           buildImproveCompanyBriefPrompt(brief),
-          "Improving your company brief with OpenClaw.",
+          "Improving your company brief with the connected runtime.",
         );
         setCompanyBuilderInput((current) => ({
           ...current,
@@ -1635,7 +1635,7 @@ export function OfficeScreen({
       try {
         const response = await runCompanyBuilderAiTask(
           buildGenerateCompanyPlanPrompt(brief),
-          "Generating your AI company structure with OpenClaw.",
+          "Generating your AI company structure with the connected runtime.",
         );
         const parsedPlan = parseCompanyPlanFromAssistantText(response);
         const nextInput: CompanyBuilderInput = {
@@ -1678,7 +1678,7 @@ export function OfficeScreen({
   const handleCreateCompanyFromPlan = useCallback(
     async (params: { input: CompanyBuilderInput; plan: CompanyBuilderPlan }) => {
       if (status !== "connected") {
-        const message = "Connect to OpenClaw before creating the company.";
+        const message = "Connect to a runtime before creating the company.";
         setCompanyBuilderError(message);
         throw new Error(message);
       }

@@ -285,6 +285,141 @@ function hermesPost(path, body) {
   });
 }
 
+function hermesGet(path) {
+  return new Promise((resolve, reject) => {
+    const urlStr = HERMES_API_URL + path;
+    let url;
+    try { url = new URL(urlStr); } catch { reject(new Error(`Invalid URL: ${urlStr}`)); return; }
+    const transport = url.protocol === "https:" ? https : http;
+    const headers = {};
+    if (HERMES_API_KEY) headers["Authorization"] = `Bearer ${HERMES_API_KEY}`;
+    const req = transport.request(
+      { hostname: url.hostname, port: url.port ? parseInt(url.port, 10) : (url.protocol === "https:" ? 443 : 80),
+        path: url.pathname + (url.search || ""), method: "GET", headers },
+      resolve
+    );
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+async function readJsonBody(res) {
+  const chunks = [];
+  for await (const chunk of res) chunks.push(Buffer.from(chunk));
+  const raw = Buffer.concat(chunks).toString("utf8");
+  if (!raw.trim()) return {};
+  return JSON.parse(raw);
+}
+
+function extractOpenAiStyleError(payload, fallbackMessage) {
+  if (payload && typeof payload === "object") {
+    const message =
+      typeof payload?.error?.message === "string"
+        ? payload.error.message.trim()
+        : "";
+    if (message) return message;
+  }
+  return fallbackMessage;
+}
+
+let cachedHermesModels = null;
+let cachedHermesModelsAt = 0;
+
+async function fetchHermesModels() {
+  const now = Date.now();
+  if (cachedHermesModels && now - cachedHermesModelsAt < 30_000) {
+    return cachedHermesModels;
+  }
+  const res = await hermesGet("/v1/models");
+  if (res.statusCode >= 400) {
+    res.resume();
+    throw new Error(`Hermes models API HTTP ${res.statusCode}`);
+  }
+  const payload = await readJsonBody(res);
+  const models = Array.isArray(payload?.data)
+    ? payload.data
+        .map((entry) => (typeof entry?.id === "string" ? entry.id.trim() : ""))
+        .filter(Boolean)
+    : [];
+  cachedHermesModels = models;
+  cachedHermesModelsAt = now;
+  return models;
+}
+
+async function resolveHermesModel(requestedModel) {
+  const trimmed = typeof requestedModel === "string" ? requestedModel.trim() : "";
+  const normalized = trimmed.includes("/") ? trimmed.split("/").pop().trim() : trimmed;
+  try {
+    const models = await fetchHermesModels();
+    if (models.length === 0) {
+      return normalized || trimmed || HERMES_MODEL;
+    }
+    const candidates = [trimmed, normalized, HERMES_MODEL]
+      .map((value) => (typeof value === "string" ? value.trim() : ""))
+      .filter(Boolean);
+    for (const candidate of candidates) {
+      const exact = models.find((modelId) => modelId === candidate);
+      if (exact) return exact;
+    }
+    for (const candidate of candidates) {
+      const suffix = models.find((modelId) => modelId.endsWith(`/${candidate}`));
+      if (suffix) return suffix;
+    }
+    return models[0];
+  } catch {
+    return normalized || trimmed || HERMES_MODEL;
+  }
+}
+
+async function completeOneTurn(messages, model, tools) {
+  const resolvedModel = await resolveHermesModel(model);
+  const body = { model: resolvedModel, messages, stream: false };
+  if (tools && tools.length > 0) {
+    body.tools = tools;
+    body.tool_choice = "auto";
+  }
+  const res = await hermesPost("/v1/chat/completions", body);
+  const payload = await readJsonBody(res);
+  if (res.statusCode >= 400) {
+    throw new Error(
+      extractOpenAiStyleError(payload, `Hermes API HTTP ${res.statusCode}`)
+    );
+  }
+  const choice = Array.isArray(payload?.choices) ? payload.choices[0] : null;
+  const message = choice?.message || {};
+  const textContent =
+    typeof message?.content === "string"
+      ? message.content
+      : Array.isArray(message?.content)
+        ? message.content
+            .map((part) => (typeof part?.text === "string" ? part.text : ""))
+            .join("")
+        : "";
+  const finishReason =
+    typeof choice?.finish_reason === "string" && choice.finish_reason
+      ? choice.finish_reason
+      : "stop";
+  const toolCalls = Array.isArray(message?.tool_calls)
+    ? message.tool_calls.map((tc) => {
+        let args = {};
+        const rawArgs = tc?.function?.arguments;
+        if (typeof rawArgs === "string" && rawArgs.trim()) {
+          try {
+            args = JSON.parse(rawArgs);
+          } catch {
+            args = { _raw: rawArgs };
+          }
+        }
+        return {
+          id: typeof tc?.id === "string" ? tc.id : randomId(),
+          name: typeof tc?.function?.name === "string" ? tc.function.name : "",
+          args,
+        };
+      })
+    : [];
+  return { textContent, toolCalls, finishReason, resolvedModel };
+}
+
 // ---------------------------------------------------------------------------
 // SSE streaming — handles both text deltas and tool calls
 // ---------------------------------------------------------------------------
@@ -297,6 +432,8 @@ async function streamOneTurn(messages, model, tools, onTextDelta, abortCheck) {
   const body = { model, messages, stream: true };
   if (tools && tools.length > 0) { body.tools = tools; body.tool_choice = "auto"; }
 
+  const resolvedModel = await resolveHermesModel(model);
+  body.model = resolvedModel;
   const res = await hermesPost("/v1/chat/completions", body);
   if (res.statusCode >= 400) {
     res.resume();
@@ -354,6 +491,15 @@ async function streamOneTurn(messages, model, tools, onTextDelta, abortCheck) {
     try { args = JSON.parse(tc.argsStr); } catch { args = { _raw: tc.argsStr }; }
     return { id: tc.id, name: tc.name, args };
   });
+
+  if (!textContent.trim() && toolCalls.length === 0 && finishReason === "stop") {
+    const fallback = await completeOneTurn(messages, resolvedModel, tools);
+    return {
+      textContent: fallback.textContent,
+      toolCalls: fallback.toolCalls,
+      finishReason: fallback.finishReason,
+    };
+  }
 
   return { textContent, toolCalls, finishReason };
 }
@@ -743,14 +889,15 @@ async function handleMethod(method, params, id, sendEvent) {
       const key = typeof p.key === "string" ? p.key : MAIN_SESSION_KEY;
       const current = sessionSettings.get(key) || {};
       const next = { ...current };
-      if (p.model !== undefined) next.model = p.model;
+      if (p.model !== undefined) next.model = typeof p.model === "string" ? p.model.trim() : p.model;
       if (p.thinkingLevel !== undefined) next.thinkingLevel = p.thinkingLevel;
       if (p.execHost !== undefined) next.execHost = p.execHost;
       if (p.execSecurity !== undefined) next.execSecurity = p.execSecurity;
       if (p.execAsk !== undefined) next.execAsk = p.execAsk;
       sessionSettings.set(key, next);
+      const resolvedModel = await resolveHermesModel(next.model || HERMES_MODEL);
       return resOk(id, { ok: true, key, entry: { thinkingLevel: next.thinkingLevel },
-        resolved: { model: next.model || HERMES_MODEL, modelProvider: "hermes" } });
+        resolved: { model: resolvedModel, modelProvider: "hermes" } });
     }
 
     case "sessions.reset": {
@@ -896,7 +1043,20 @@ async function handleMethod(method, params, id, sendEvent) {
       return resOk(id, { skills: [] });
 
     case "models.list":
-      return resOk(id, { models: [{ id: HERMES_MODEL, name: HERMES_AGENT_NAME }] });
+      try {
+        const models = await fetchHermesModels();
+        return resOk(id, {
+          models: (models.length > 0 ? models : [HERMES_MODEL]).map((modelId) => ({
+            id: modelId,
+            name: modelId,
+          })),
+        });
+      } catch {
+        return resOk(id, { models: [{ id: HERMES_MODEL, name: HERMES_MODEL }] });
+      }
+
+    case "tasks.list":
+      return resOk(id, { tasks: [] });
 
     // --- Cron jobs ----------------------------------------------------------
 
@@ -1019,6 +1179,7 @@ function startAdapter() {
               "agents.files.get","agents.files.set",
               "exec.approvals.get","exec.approvals.set","exec.approval.resolve",
               "wake","skills.status","models.list",
+              "tasks.list",
               "cron.list","cron.add","cron.remove","cron.patch","cron.run"],
               events: ["chat","presence","heartbeat","cron"] },
             snapshot: { health: { agents: allAgents, defaultAgentId: AGENT_ID },
