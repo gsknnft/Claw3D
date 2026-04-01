@@ -53,7 +53,6 @@ export function useCronAgents(params: {
 
   useEffect(() => {
     if (status !== "connected" || !client) {
-      setAgents([]);
       return;
     }
 
@@ -89,5 +88,5 @@ export function useCronAgents(params: {
     };
   }, [client, status]);
 
-  return agents;
+  return status === "connected" && client ? agents : [];
 }

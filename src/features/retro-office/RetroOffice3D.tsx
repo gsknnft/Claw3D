@@ -5177,19 +5177,21 @@ export function RetroOffice3D({
     ? DISTRICT_CAMERA_TARGET
     : LOCAL_CAMERA_TARGET;
   const cameraZoom = remoteOfficeEnabled ? DISTRICT_CAMERA_ZOOM : 56;
-  const overviewPresetRef = useRef({ pos: CAM_POS, target: cameraTarget, zoom: cameraZoom });
-  overviewPresetRef.current = { pos: CAM_POS, target: cameraTarget, zoom: cameraZoom };
+  const overviewPreset = useMemo(
+    () => ({ pos: CAM_POS, target: cameraTarget, zoom: cameraZoom }),
+    [CAM_POS, cameraTarget, cameraZoom]
+  );
   const lastOfficeCenterSignalRef = useRef(officeCenterSignal);
 
   useEffect(() => {
-    cameraPresetRef.current = overviewPresetRef.current;
-  }, [CAM_POS, cameraTarget, cameraZoom]);
+    cameraPresetRef.current = overviewPreset;
+  }, [overviewPreset]);
 
   useEffect(() => {
     if (officeCenterSignal === lastOfficeCenterSignalRef.current) return;
     lastOfficeCenterSignalRef.current = officeCenterSignal;
-    cameraPresetRef.current = overviewPresetRef.current;
-  }, [officeCenterSignal, CAM_POS, cameraTarget, cameraZoom]);
+    cameraPresetRef.current = overviewPreset;
+  }, [officeCenterSignal, overviewPreset]);
 
   return (
     <div className="relative w-full h-full bg-[#1a1008] font-mono text-white overflow-hidden">
