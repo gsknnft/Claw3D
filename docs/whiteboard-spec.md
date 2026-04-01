@@ -284,6 +284,34 @@ type OfficePreference = {
 
 Storage should be keyed by gateway URL / office context so each connected office can keep its own working state.
 
+## JSON Canvas Compatibility
+
+JSON Canvas is a good interoperability target for the whiteboard, but it should not define the product by itself.
+
+Recommended stance:
+
+- use Claw3D's own whiteboard model as the primary domain model
+- support export/import to JSON Canvas as a compatibility layer
+- avoid turning the whiteboard into a generic infinite-canvas editor before the office workflow is proven
+
+Why:
+
+- Claw3D needs stronger links to meetings, bulletin board items, tasks, agents, and sessions
+- the whiteboard is a workflow surface, not only a canvas
+- structured planning is more important than unconstrained canvas freedom in V1
+
+Good use of JSON Canvas:
+
+- export planning boards
+- import external draft canvases
+- map blocks/groups into JSON Canvas nodes
+- preserve links where practical
+
+Bad use of JSON Canvas:
+
+- letting a generic canvas model dictate the first product UX
+- replacing office-native planning behavior with a broad but shallow editor
+
 ## Authoring Rules
 
 Allowed authors:
