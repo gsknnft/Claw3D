@@ -3311,7 +3311,7 @@ export function RetroOffice3D({
       !activeGithubTerminalUid &&
       !activeQaTerminalUid
     ) {
-      cameraPresetRef.current = overviewPresetRef.current;
+      cameraPresetRef.current = overviewPreset;
     }
   }, [
     activeAtmUid,
@@ -3340,7 +3340,7 @@ export function RetroOffice3D({
       !activeGithubTerminalUid &&
       !activeQaTerminalUid
     ) {
-      cameraPresetRef.current = overviewPresetRef.current;
+      cameraPresetRef.current = overviewPreset;
     }
   }, [
     activeAtmUid,
@@ -3947,7 +3947,7 @@ export function RetroOffice3D({
         ? `agent:${smsBoothAgentId}`
         : null;
     if (!activeViewKey && prevSmsBoothViewRef.current) {
-      cameraPresetRef.current = overviewPresetRef.current;
+      cameraPresetRef.current = overviewPreset;
     }
     if (!activeViewKey || !activeSmsBooth) {
       prevSmsBoothViewRef.current = activeViewKey;
@@ -4095,7 +4095,7 @@ export function RetroOffice3D({
         ? `agent:${phoneBoothAgentId}`
         : null;
     if (!activeViewKey && prevPhoneBoothViewRef.current) {
-      cameraPresetRef.current = overviewPresetRef.current;
+      cameraPresetRef.current = overviewPreset;
     }
     if (!activeViewKey || !activePhoneBooth) {
       prevPhoneBoothViewRef.current = activeViewKey;
@@ -4242,7 +4242,7 @@ export function RetroOffice3D({
 
   useEffect(() => {
     if (!monitorAgentId && prevMonitorAgentIdRef.current) {
-      cameraPresetRef.current = overviewPresetRef.current;
+      cameraPresetRef.current = overviewPreset;
     }
     if (!monitorAgentId || !activeMonitorComputer) {
       prevMonitorAgentIdRef.current = monitorAgentId;
@@ -4306,7 +4306,7 @@ export function RetroOffice3D({
 
   useEffect(() => {
     if (!activeAtmUid && prevAtmUidRef.current) {
-      cameraPresetRef.current = overviewPresetRef.current;
+      cameraPresetRef.current = overviewPreset;
     }
     if (!activeAtmUid || !activeAtm) {
       prevAtmUidRef.current = activeAtmUid;
@@ -4340,7 +4340,7 @@ export function RetroOffice3D({
         ? `agent:${githubReviewAgentId}`
         : null;
     if (!activeViewKey && prevGithubViewRef.current) {
-      cameraPresetRef.current = overviewPresetRef.current;
+      cameraPresetRef.current = overviewPreset;
     }
     if (!activeViewKey || !activeGithubTerminal) {
       prevGithubViewRef.current = activeViewKey;
@@ -4375,7 +4375,7 @@ export function RetroOffice3D({
         ? `agent:${qaTestingAgentId}`
         : null;
     if (!activeViewKey && prevQaViewRef.current) {
-      cameraPresetRef.current = overviewPresetRef.current;
+      cameraPresetRef.current = overviewPreset;
     }
     if (!activeViewKey || !activeQaTerminal) {
       prevQaViewRef.current = activeViewKey;
@@ -4741,7 +4741,7 @@ export function RetroOffice3D({
       !activeGithubTerminalUid &&
       !activeQaTerminalUid
     ) {
-      cameraPresetRef.current = overviewPresetRef.current;
+      cameraPresetRef.current = overviewPreset;
     }
   }, [
     activeAtmUid,
