@@ -2,18 +2,21 @@ import { useMemo, useState } from "react";
 import { Check, Copy, Eye, EyeOff } from "lucide-react";
 import type { GatewayStatus } from "@/lib/gateway/GatewayClient";
 import { isLocalGatewayUrl } from "@/lib/gateway/local-gateway";
-import type { StudioGatewaySettings } from "@/lib/studio/settings";
+import type { StudioGatewayAdapterType, StudioGatewaySettings } from "@/lib/studio/settings";
 import { RunningAvatarLoader } from "@/features/agents/components/RunningAvatarLoader";
 
 type GatewayConnectScreenProps = {
   gatewayUrl: string;
   token: string;
+  selectedAdapterType: StudioGatewayAdapterType;
+  activeAdapterType: StudioGatewayAdapterType;
   localGatewayDefaults: StudioGatewaySettings | null;
   status: GatewayStatus;
   error: string | null;
   showApprovalHint: boolean;
   onGatewayUrlChange: (value: string) => void;
   onTokenChange: (value: string) => void;
+  onAdapterTypeChange: (value: StudioGatewayAdapterType) => void;
   onUseLocalDefaults: () => void;
   onConnect: () => void;
 };
@@ -30,12 +33,15 @@ const resolveLocalGatewayPort = (gatewayUrl: string): number => {
 export const GatewayConnectScreen = ({
   gatewayUrl,
   token,
+  selectedAdapterType,
+  activeAdapterType,
   localGatewayDefaults,
   status,
   error,
   showApprovalHint,
   onGatewayUrlChange,
   onTokenChange,
+  onAdapterTypeChange,
   onUseLocalDefaults,
   onConnect,
 }: GatewayConnectScreenProps) => {
@@ -56,14 +62,17 @@ export const GatewayConnectScreen = ({
     []
   );
   const useDemoPreset = () => {
+    onAdapterTypeChange("demo");
     onGatewayUrlChange("ws://localhost:18789");
     onTokenChange("");
   };
   const useHermesPreset = () => {
+    onAdapterTypeChange("hermes");
     onGatewayUrlChange("ws://localhost:18789");
     onTokenChange("");
   };
   const useOpenClawPreset = () => {
+    onAdapterTypeChange("openclaw");
     if (localGatewayDefaults) {
       onUseLocalDefaults();
       return;
@@ -227,28 +236,33 @@ export const GatewayConnectScreen = ({
           <p className="font-mono text-[10px] font-medium tracking-[0.06em] text-muted-foreground">
             Remote gateway (recommended)
           </p>
-          <p className="mt-2 text-sm text-foreground/90">Default: enter your URL and token to connect.</p>
+          <p className="mt-2 text-sm text-foreground/90">
+            Choose a backend, then connect to its gateway URL.
+          </p>
+          <p className="mt-2 font-mono text-[11px] text-muted-foreground">
+            Selected backend: {selectedAdapterType} | Active backend: {activeAdapterType}
+          </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               type="button"
               className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
               onClick={useDemoPreset}
             >
-              Use Demo
+              Demo backend
             </button>
             <button
               type="button"
               className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
               onClick={useHermesPreset}
             >
-              Use Hermes
+              Hermes backend
             </button>
             <button
               type="button"
               className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
               onClick={useOpenClawPreset}
             >
-              Use OpenClaw
+              OpenClaw backend
             </button>
           </div>
         </div>
@@ -270,14 +284,14 @@ export const GatewayConnectScreen = ({
             <p className="text-xs font-medium text-foreground">Just want to see the office?</p>
             <p className="mt-1 text-xs leading-snug text-muted-foreground">
               Run <span className="font-mono text-foreground">{localDemoCommand}</span> to start a built-in mock gateway with demo agents.
-              No OpenClaw or Hermes required.
+              Then choose <span className="font-mono text-foreground">Demo backend</span> and connect.
             </p>
           </div>
           <div className="rounded-md border border-border bg-muted/30 px-3 py-3">
             <p className="text-xs font-medium text-foreground">Using Hermes locally?</p>
             <p className="mt-1 text-xs leading-snug text-muted-foreground">
               Run <span className="font-mono text-foreground">npm run hermes-adapter</span>, then choose
-              <span className="font-mono text-foreground"> Use Hermes</span>. The default local URL is
+              <span className="font-mono text-foreground"> Hermes backend</span>. The default local URL is
               <span className="font-mono text-foreground"> ws://localhost:18789</span>.
             </p>
           </div>

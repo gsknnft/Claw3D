@@ -18,16 +18,21 @@ import {
 export type StudioGatewaySettings = {
   url: string;
   token: string;
+  adapterType: StudioGatewayAdapterType;
 };
+
+export type StudioGatewayAdapterType = "openclaw" | "hermes" | "demo";
 
 export type StudioGatewaySettingsPublic = {
   url: string;
   tokenConfigured: boolean;
+  adapterType: StudioGatewayAdapterType;
 };
 
 export type StudioGatewaySettingsPatch = {
   url?: string | null;
   token?: string | null;
+  adapterType?: StudioGatewayAdapterType | null;
 };
 
 export type FocusFilter = "all" | "running" | "approvals";
@@ -640,7 +645,8 @@ const normalizeGatewaySettings = (value: unknown): StudioGatewaySettings | null 
   const url = normalizeGatewayUrl(value.url);
   if (!url) return null;
   const token = coerceString(value.token);
-  return { url, token };
+  const adapterType = normalizeGatewayAdapterType(value.adapterType);
+  return { url, token, adapterType };
 };
 
 const mergeGatewaySettings = (
@@ -653,10 +659,26 @@ const mergeGatewaySettings = (
   if (!nextUrl) return null;
   const nextToken =
     patch.token === undefined ? current?.token ?? "" : coerceString(patch.token);
+  const nextAdapterType =
+    patch.adapterType === undefined
+      ? current?.adapterType ?? "openclaw"
+      : normalizeGatewayAdapterType(patch.adapterType);
   return {
     url: nextUrl,
     token: nextToken,
+    adapterType: nextAdapterType,
   };
+};
+
+const normalizeGatewayAdapterType = (
+  value: unknown,
+  fallback: StudioGatewayAdapterType = "openclaw"
+): StudioGatewayAdapterType => {
+  const adapterType = coerceString(value).toLowerCase();
+  if (adapterType === "demo" || adapterType === "hermes" || adapterType === "openclaw") {
+    return adapterType;
+  }
+  return fallback;
 };
 
 const normalizeFocused = (value: unknown): Record<string, StudioFocusedPreference> => {
@@ -866,6 +888,7 @@ export const sanitizeStudioGatewaySettings = (
   return {
     url: value.url,
     tokenConfigured: value.token.length > 0,
+    adapterType: value.adapterType,
   };
 };
 

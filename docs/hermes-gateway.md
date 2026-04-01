@@ -57,6 +57,10 @@ Then open `http://localhost:3000` and connect to:
 ws://localhost:18789
 ```
 
+In the connect screen, select `Hermes backend`. Claw3D will persist that
+selection in Studio settings and show `Hermes` as the active backend once
+the adapter hello response is received.
+
 ### 4. Optional all-in-one local startup
 
 The repo also includes:

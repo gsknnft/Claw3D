@@ -45,7 +45,7 @@ const setupAndImportHook = async (gatewayUrl: string | null) => {
 
       start() {
         this.connected = true;
-        this.opts.onHello?.({ type: "hello-ok", protocol: 1 });
+        this.opts.onHello?.({ type: "hello-ok", protocol: 1, adapterType: "openclaw" });
       }
 
       stop() {
@@ -73,7 +73,14 @@ const setupAndImportHook = async (gatewayUrl: string | null) => {
     }) => {
       gatewayUrl: string;
       token: string;
-      localGatewayDefaults: { url: string; token: string } | null;
+      selectedAdapterType: "openclaw" | "hermes" | "demo";
+      detectedAdapterType: "openclaw" | "hermes" | "demo" | null;
+      activeAdapterType: "openclaw" | "hermes" | "demo";
+      localGatewayDefaults: {
+        url: string;
+        token: string;
+        adapterType: "openclaw" | "hermes" | "demo";
+      } | null;
       useLocalGatewayDefaults: () => void;
     },
     captured,
@@ -268,5 +275,56 @@ describe("useGatewayConnection", () => {
       expect(screen.getByTestId("gatewayUrl")).toHaveTextContent("ws://localhost:18789");
     });
     expect(screen.getByTestId("token")).toHaveTextContent("local-token");
+  });
+
+  it("loads_and_persists_selected_adapter_type", async () => {
+    const { useGatewayConnection } = await setupAndImportHook(null);
+    const patches: unknown[] = [];
+    const coordinator = {
+      loadSettingsEnvelope: async () => ({
+        settings: {
+          version: 1,
+          gateway: {
+            url: "ws://localhost:18789",
+            token: "",
+            adapterType: "hermes",
+          },
+          focused: {},
+          avatars: {},
+          analytics: {},
+          voiceReplies: {},
+          office: {},
+          deskAssignments: {},
+          standup: {},
+          taskBoard: {},
+        },
+        localGatewayDefaults: null,
+      }),
+      loadSettings: async () => null,
+      schedulePatch: (patch: unknown) => {
+        patches.push(patch);
+      },
+      flushPending: async () => {},
+    };
+
+    const Probe = () => {
+      const state = useGatewayConnection(coordinator);
+      return createElement(
+        "div",
+        null,
+        createElement("div", { "data-testid": "selectedAdapterType" }, state.selectedAdapterType),
+        createElement("div", { "data-testid": "activeAdapterType" }, state.activeAdapterType)
+      );
+    };
+
+    render(createElement(Probe));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("selectedAdapterType")).toHaveTextContent("hermes");
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("activeAdapterType")).toHaveTextContent("hermes");
+    });
+    expect(patches).toEqual([]);
   });
 });

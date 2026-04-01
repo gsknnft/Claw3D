@@ -224,6 +224,8 @@ const AgentsPageScreen = () => {
     shouldPromptForConnect,
     gatewayUrl,
     token,
+    selectedAdapterType,
+    activeAdapterType,
     localGatewayDefaults,
     error: gatewayError,
     connect,
@@ -231,6 +233,7 @@ const AgentsPageScreen = () => {
     useLocalGatewayDefaults,
     setGatewayUrl,
     setToken,
+    setSelectedAdapterType,
     supportsCapability,
   } = useRuntimeConnection(settingsCoordinator);
   const runtimeSupportsConfig = supportsCapability("config");
@@ -1402,12 +1405,15 @@ const AgentsPageScreen = () => {
                   <ConnectionPanel
                     gatewayUrl={gatewayUrl}
                     token={token}
+                    selectedAdapterType={selectedAdapterType}
+                    activeAdapterType={activeAdapterType}
                     localGatewayUrl={localGatewayDefaults?.url ?? null}
                     localGatewayToken={localGatewayDefaults?.token ?? null}
                     status={status}
                     error={gatewayError}
                     onGatewayUrlChange={setGatewayUrl}
                     onTokenChange={setToken}
+                    onAdapterTypeChange={setSelectedAdapterType}
                     onConnect={() => void connect()}
                     onDisconnect={disconnect}
                     onClose={() => setShowConnectionPanel(false)}
@@ -1418,12 +1424,15 @@ const AgentsPageScreen = () => {
               <GatewayConnectScreen
                 gatewayUrl={gatewayUrl}
                 token={token}
+                selectedAdapterType={selectedAdapterType}
+                activeAdapterType={activeAdapterType}
                 localGatewayDefaults={localGatewayDefaults}
                 status={status}
                 error={gatewayError}
                 showApprovalHint={didAttemptGatewayConnect}
                 onGatewayUrlChange={setGatewayUrl}
                 onTokenChange={setToken}
+                onAdapterTypeChange={setSelectedAdapterType}
                 onUseLocalDefaults={useLocalGatewayDefaults}
                 onConnect={() => void connect()}
               />
@@ -1470,12 +1479,15 @@ const AgentsPageScreen = () => {
                 <ConnectionPanel
                   gatewayUrl={gatewayUrl}
                   token={token}
+                  selectedAdapterType={selectedAdapterType}
+                  activeAdapterType={activeAdapterType}
                   localGatewayUrl={localGatewayDefaults?.url ?? null}
                   localGatewayToken={localGatewayDefaults?.token ?? null}
                   status={status}
                   error={gatewayError}
                   onGatewayUrlChange={setGatewayUrl}
                   onTokenChange={setToken}
+                  onAdapterTypeChange={setSelectedAdapterType}
                   onConnect={() => void connect()}
                   onDisconnect={disconnect}
                   onClose={() => setShowConnectionPanel(false)}

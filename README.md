@@ -99,6 +99,8 @@ npm run dev
 ```
 
 Then open `http://localhost:3000` and configure the gateway URL and token in Studio.
+Studio now also persists the selected backend mode (`OpenClaw`, `Hermes`, or `Demo`) and
+shows the active backend reported by the connected gateway.
 
 ### Demo mode
 
@@ -116,6 +118,7 @@ ws://localhost:18789
 ```
 
 This starts a mock local gateway with demo agents, streaming chat, session previews, and office presence.
+In the connect screen, choose `Demo backend`, then connect.
 
 ### Hermes adapter
 
@@ -133,6 +136,8 @@ For a local gateway on the same machine, the usual upstream URL is:
 ```text
 ws://localhost:18789
 ```
+
+In the connect screen, choose `Hermes backend`, then connect.
 
 ## How It Connects
 

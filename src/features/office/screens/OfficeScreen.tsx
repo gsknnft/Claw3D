@@ -842,6 +842,8 @@ export function OfficeScreen({
     shouldPromptForConnect,
     gatewayUrl,
     token,
+    selectedAdapterType,
+    activeAdapterType,
     localGatewayDefaults,
     error: gatewayError,
     connect,
@@ -849,6 +851,7 @@ export function OfficeScreen({
     useLocalGatewayDefaults,
     setGatewayUrl,
     setToken,
+    setSelectedAdapterType,
     supportsCapability,
   } =
     useRuntimeConnection(settingsCoordinator);
@@ -4136,12 +4139,15 @@ export function OfficeScreen({
         <GatewayConnectScreen
           gatewayUrl={gatewayUrl}
           token={token}
+          selectedAdapterType={selectedAdapterType}
+          activeAdapterType={activeAdapterType}
           localGatewayDefaults={localGatewayDefaults}
           status={status}
           error={gatewayError}
           showApprovalHint={didAttemptGatewayConnect}
           onGatewayUrlChange={setGatewayUrl}
           onTokenChange={setToken}
+          onAdapterTypeChange={setSelectedAdapterType}
           onUseLocalDefaults={useLocalGatewayDefaults}
           onConnect={() => void connect()}
         />

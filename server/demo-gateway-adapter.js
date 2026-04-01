@@ -427,6 +427,7 @@ function startAdapter() {
           payload: {
             type: "hello-ok",
             protocol: 3,
+            adapterType: "demo",
             features: {
               methods: [
                 "agents.list",

@@ -1,16 +1,20 @@
 import type { GatewayStatus } from "@/lib/gateway/GatewayClient";
+import type { StudioGatewayAdapterType } from "@/lib/studio/settings";
 import { X } from "lucide-react";
 import { resolveGatewayStatusBadgeClass, resolveGatewayStatusLabel } from "./colorSemantics";
 
 type ConnectionPanelProps = {
   gatewayUrl: string;
   token: string;
+  selectedAdapterType: StudioGatewayAdapterType;
+  activeAdapterType: StudioGatewayAdapterType;
   localGatewayUrl?: string | null;
   localGatewayToken?: string | null;
   status: GatewayStatus;
   error: string | null;
   onGatewayUrlChange: (value: string) => void;
   onTokenChange: (value: string) => void;
+  onAdapterTypeChange: (value: StudioGatewayAdapterType) => void;
   onConnect: () => void;
   onDisconnect: () => void;
   onClose?: () => void;
@@ -19,12 +23,15 @@ type ConnectionPanelProps = {
 export const ConnectionPanel = ({
   gatewayUrl,
   token,
+  selectedAdapterType,
+  activeAdapterType,
   localGatewayUrl = null,
   localGatewayToken = null,
   status,
   error,
   onGatewayUrlChange,
   onTokenChange,
+  onAdapterTypeChange,
   onConnect,
   onDisconnect,
   onClose,
@@ -32,14 +39,17 @@ export const ConnectionPanel = ({
   const isConnected = status === "connected";
   const isConnecting = status === "connecting";
   const applyDemoPreset = () => {
+    onAdapterTypeChange("demo");
     onGatewayUrlChange("ws://localhost:18789");
     onTokenChange("");
   };
   const applyHermesPreset = () => {
+    onAdapterTypeChange("hermes");
     onGatewayUrlChange("ws://localhost:18789");
     onTokenChange("");
   };
   const applyOpenClawPreset = () => {
+    onAdapterTypeChange("openclaw");
     onGatewayUrlChange(localGatewayUrl?.trim() || "ws://localhost:18789");
     onTokenChange(localGatewayToken?.trim() || "");
   };
@@ -100,27 +110,31 @@ export const ConnectionPanel = ({
           />
         </label>
       </div>
+      <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+        <span className="font-mono">Selected backend: {selectedAdapterType}</span>
+        <span className="font-mono">Active backend: {activeAdapterType}</span>
+      </div>
       <div className="flex flex-wrap gap-2">
         <button
           className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
           type="button"
           onClick={applyDemoPreset}
         >
-          Demo preset
+          Demo backend
         </button>
         <button
           className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
           type="button"
           onClick={applyHermesPreset}
         >
-          Hermes preset
+          Hermes backend
         </button>
         <button
           className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
           type="button"
           onClick={applyOpenClawPreset}
         >
-          OpenClaw preset
+          OpenClaw backend
         </button>
       </div>
       {error ? (

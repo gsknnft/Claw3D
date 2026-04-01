@@ -252,13 +252,6 @@ function getHistory(sessionKey) {
   return conversationHistory.get(sessionKey);
 }
 
-function appendHistory(sessionKey, userMsg, assistantMsg) {
-  const history = getHistory(sessionKey);
-  history.push({ role: "user", content: userMsg });
-  history.push({ role: "assistant", content: assistantMsg });
-  saveHistoryToDisk();
-}
-
 function clearHistory(sessionKey) {
   conversationHistory.delete(sessionKey);
   saveHistoryToDisk();
@@ -337,7 +330,7 @@ async function streamOneTurn(messages, model, tools, onTextDelta, abortCheck) {
           // Text content
           if (typeof delta.content === "string" && delta.content) {
             textContent += delta.content;
-            onTextDelta && onTextDelta(textContent);
+            if (onTextDelta) onTextDelta(textContent);
           }
           // Tool call accumulation
           if (Array.isArray(delta.tool_calls)) {
@@ -379,7 +372,7 @@ function broadcastEvent(frame) {
 // Tool executors
 // ---------------------------------------------------------------------------
 
-async function execSpawnAgent(args, sendEvent) {
+async function execSpawnAgent(args) {
   const name = (typeof args.name === "string" ? args.name : "Agent").trim() || "Agent";
   const role = (typeof args.role === "string" ? args.role : "").trim();
   const instructions = typeof args.instructions === "string" ? args.instructions.trim() : "";
@@ -417,7 +410,7 @@ async function execSpawnAgent(args, sendEvent) {
   return JSON.stringify({ ok: true, agent_id: newId, name, role });
 }
 
-async function execDelegateTask(args, sendEvent) {
+async function execDelegateTask(args) {
   const targetId = typeof args.agent_id === "string" ? args.agent_id.trim() : "";
   const message = typeof args.message === "string" ? args.message.trim() : "";
   if (!targetId || !message) return JSON.stringify({ ok: false, error: "agent_id and message required" });
@@ -1018,6 +1011,7 @@ function startAdapter() {
           type: "res", id, ok: true,
           payload: {
             type: "hello-ok", protocol: 3,
+            adapterType: "hermes",
             features: { methods: ["agents.list","agents.create","agents.delete","agents.update",
               "sessions.list","sessions.preview","sessions.patch","sessions.reset",
               "chat.send","chat.abort","chat.history","agent.wait",

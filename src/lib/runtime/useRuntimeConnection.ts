@@ -3,7 +3,7 @@
 import { useMemo } from "react";
 
 import { type GatewayConnectionState, useGatewayConnection } from "@/lib/gateway/GatewayClient";
-import { OpenClawRuntimeProvider } from "@/lib/runtime/openclaw/provider";
+import { createRuntimeProvider } from "@/lib/runtime/createRuntimeProvider";
 import {
   hasRuntimeCapability,
   type RuntimeCapability,
@@ -23,7 +23,10 @@ export const useRuntimeConnection = (
   settingsCoordinator: StudioSettingsCoordinator
 ): RuntimeConnectionState => {
   const gateway = useGatewayConnection(settingsCoordinator);
-  const provider = useMemo(() => new OpenClawRuntimeProvider(gateway.client), [gateway.client]);
+  const provider = useMemo(
+    () => createRuntimeProvider(gateway.activeAdapterType, gateway.client),
+    [gateway.activeAdapterType, gateway.client]
+  );
   const capabilities = provider.capabilities;
 
   return {

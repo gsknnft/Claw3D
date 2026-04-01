@@ -20,7 +20,7 @@ export type RuntimeCapability =
   | "files"
   | "agent-roles";
 
-export type RuntimeProviderId = "openclaw" | "hermes" | "vera";
+export type RuntimeProviderId = "openclaw" | "hermes" | "demo" | "vera";
 
 export type RuntimeSummaryEvent = {
   type: "summary-refresh";
