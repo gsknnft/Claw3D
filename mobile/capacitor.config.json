@@ -1,0 +1,8 @@
+{
+  "appId": "com.claw3d.app",
+  "appName": "Claw3D",
+  "webDir": "../out",
+  "server": {
+    "androidScheme": "https"
+  }
+}

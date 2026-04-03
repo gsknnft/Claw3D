@@ -12,6 +12,33 @@ Think of it as:
 
 An office for your AI team.
 
+## Android App (Beta)
+
+Claw3D can now be built as a native Android app using Capacitor.
+
+### Prerequisites for Mobile
+- Android Studio installed.
+- Node.js 20+.
+
+### How to Build the Android App
+1. **Initialize the Mobile Project:**
+   ```bash
+   chmod +x scripts/init-android.sh
+   ./scripts/init-android.sh
+   ```
+2. **Build and Sync:**
+   ```bash
+   npm run build:mobile
+   ```
+3. **Open in Android Studio:**
+   ```bash
+   cd mobile
+   npx cap open android
+   ```
+4. **Run:** In Android Studio, select your device and click "Run".
+
+**Note:** The mobile app connects directly to your gateway. Ensure your gateway is reachable from your phone's network (e.g., via Tailscale or a public IP).
+
 ## What you can do with Claw3D
 
 • Watch your AI agents work in real time

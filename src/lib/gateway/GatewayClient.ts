@@ -247,7 +247,7 @@ export class GatewayClient {
   private status: GatewayStatus = "disconnected";
   private pendingConnect: Promise<void> | null = null;
   private resolveConnect: (() => void) | null = null;
-  private rejectConnect: ((error: Error) => void) | null = null;
+  private rejectConnect: (() => void) | null = null;
   private manualDisconnect = false;
   private lastHello: GatewayHelloOk | null = null;
 
@@ -895,8 +895,11 @@ export const useGatewayConnection = (
       let lastError: unknown = null;
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         try {
+          const isNative = (window as any).Capacitor?.isNative;
+          const connectUrl = isNative ? gatewayUrl : resolveStudioProxyGatewayUrl();
+
           await client.connect({
-            gatewayUrl: resolveStudioProxyGatewayUrl(),
+            gatewayUrl: connectUrl,
             token,
             authScopeKey: gatewayUrl,
             clientName: "openclaw-control-ui",
@@ -1089,6 +1092,34 @@ export const useGatewayConnection = (
       400
     );
   }, [adapterProfiles, gatewayUrl, selectedAdapterType, settingsCoordinator, settingsLoaded, token]);
+
+  // Register Android back button listener
+  useEffect(() => {
+    const Capacitor = (window as any).Capacitor;
+    if (!Capacitor?.isNative) return;
+
+    let backListener: any = null;
+
+    const setupListener = async () => {
+      const { App } = await import("@capacitor/app");
+      backListener = await App.addListener("backButton", (data) => {
+        if (!data.canGoBack) {
+          // If we can't go back, maybe exit the app or do nothing
+          return;
+        }
+        // Basic back logic - you might want to expand this to close modals
+        window.history.back();
+      });
+    };
+
+    setupListener();
+
+    return () => {
+      if (backListener) {
+        backListener.remove();
+      }
+    };
+  }, []);
 
   const useLocalGatewayDefaults = useCallback(() => {
     if (!localGatewayDefaults) {
