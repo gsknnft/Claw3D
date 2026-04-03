@@ -14,30 +14,33 @@ An office for your AI team.
 
 ## Android App (Beta)
 
-Claw3D can now be built as a native Android app using Capacitor.
-
-### Prerequisites for Mobile
-- Android Studio installed.
-- Node.js 20+.
+Claw3D is now available as a native Android application, allowing you to carry your AI workspace in your pocket.
 
 ### How to Build the Android App
-1. **Initialize the Mobile Project:**
+1. **Prepare Environment:** Ensure you have Android Studio and Node.js 20+ installed.
+2. **Initialize Mobile:**
    ```bash
    chmod +x scripts/init-android.sh
    ./scripts/init-android.sh
    ```
-2. **Build and Sync:**
+3. **Build & Sync:**
    ```bash
    npm run build:mobile
    ```
-3. **Open in Android Studio:**
+4. **Open & Run:**
    ```bash
    cd mobile
    npx cap open android
    ```
-4. **Run:** In Android Studio, select your device and click "Run".
+   *In Android Studio, select your device and click the Green "Run" button.*
 
-**Note:** The mobile app connects directly to your gateway. Ensure your gateway is reachable from your phone's network (e.g., via Tailscale or a public IP).
+### Mobile Features
+- **Direct Connect:** Bypasses the Node.js proxy to connect directly to your Gateway (works over Tailscale/VPN).
+- **Native Haptics:** Tactile feedback for 3D interactions and chat.
+- **Android Back Navigation:** Full support for the physical/virtual back button.
+- **Standalone Mode:** Immersive, full-screen 3D office experience.
+
+---
 
 ## What you can do with Claw3D
 
@@ -242,6 +245,7 @@ Alternative with SSH:
 - Three.js, React Three Fiber, and Drei for the 3D office experience.
 - Phaser for office/viewer-builder workflows and related interactive surfaces.
 - Vitest for unit tests and Playwright for end-to-end coverage.
+- **Mobile:** Capacitor 7+ (Native Android).
 
 ## Configuration
 
@@ -272,6 +276,7 @@ See [`.env.example`](.env.example) for the full local development template.
 - `npm run demo-gateway` starts the built-in mock gateway for demo mode.
 - `npm run build` builds the production Next.js app.
 - `npm run start` starts the production server.
+- `npm run build:mobile` builds and syncs the Android app.
 - `npm run lint` runs ESLint.
 - `npm run typecheck` runs TypeScript without emitting output.
 - `npm run test` runs unit tests with Vitest.
