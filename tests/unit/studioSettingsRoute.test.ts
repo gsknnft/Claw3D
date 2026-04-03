@@ -47,8 +47,20 @@ describe("studio settings route", () => {
 
     const response = await GET();
     const body = (await response.json()) as {
-      settings?: { gateway?: { url?: string; tokenConfigured?: boolean } | null };
-      localGatewayDefaults?: { url?: string; tokenConfigured?: boolean } | null;
+      settings?: {
+        gateway?: {
+          url?: string;
+          tokenConfigured?: boolean;
+          adapterType?: string;
+          profiles?: Record<string, { url?: string; tokenConfigured?: boolean }>;
+        } | null;
+      };
+      localGatewayDefaults?: {
+        url?: string;
+        tokenConfigured?: boolean;
+        adapterType?: string;
+        profiles?: Record<string, { url?: string; tokenConfigured?: boolean }>;
+      } | null;
     };
 
     expect(response.status).toBe(200);
@@ -56,11 +68,23 @@ describe("studio settings route", () => {
       url: "ws://localhost:18791",
       tokenConfigured: true,
       adapterType: "openclaw",
+      profiles: {
+        openclaw: {
+          url: "ws://localhost:18791",
+          tokenConfigured: true,
+        },
+      },
     });
     expect(body.settings?.gateway).toEqual({
       url: "ws://localhost:18791",
       tokenConfigured: true,
       adapterType: "openclaw",
+      profiles: {
+        openclaw: {
+          url: "ws://localhost:18791",
+          tokenConfigured: true,
+        },
+      },
     });
   });
 
@@ -69,7 +93,7 @@ describe("studio settings route", () => {
     process.env.OPENCLAW_STATE_DIR = tempDir;
 
     const response = await PUT({
-      json: async () => "nope",
+      text: async () => JSON.stringify("nope"),
     } as unknown as Request);
     const body = (await response.json()) as { error?: string };
 
@@ -92,7 +116,7 @@ describe("studio settings route", () => {
     };
 
     const putResponse = await PUT({
-      json: async () => patch,
+      text: async () => JSON.stringify(patch),
     } as unknown as Request);
     expect(putResponse.status).toBe(200);
 
