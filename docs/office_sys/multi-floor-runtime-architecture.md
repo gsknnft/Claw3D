@@ -1,266 +1,411 @@
 # Multi-Floor Runtime Architecture
 
-> Architecture seed for evolving Claw3D from single-runtime office switching into a persistent multi-runtime building.
+> Architecture note for evolving Claw3D from single-runtime switching into one persistent building with multiple runtime-backed floors.
 
 ## Goal
 
-Claw3D should grow from:
+Claw3D should move from:
 
 - one selected runtime at a time
 
-into:
+to:
 
-- one building
+- one building shell
 - multiple floors
-- one or more runtimes loaded into that building at once
-- persistent rosters per floor
+- one runtime binding per floor
+- one or more floors active in the same session
+- persistent roster/state per floor
 - controlled cross-floor interaction
 
-This is the clean path from today's provider seam toward Office Systems.
+This is the bridge from the merged runtime seam work into Office Systems.
 
-## Core Model
+## Product Model
 
-Each runtime gets its own floor.
+The user should think in places, not provider toggles.
 
 Examples:
 
-- OpenClaw floor
-- Hermes floor
-- Custom floor
-- Demo lobby or onboarding floor
+- `Lobby`
+  - onboarding, demo, reception, visitor flow
+- `OpenClaw Floor`
+  - default upstream team
+- `Hermes Floor`
+  - supervisor / orchestration team
+- `Custom Floor`
+  - downstream/orchestrator/runtime experiments
+- `Training Floor`
+  - classrooms, auditorium, distillation labs, evals, coaching, simulations
+- `Trader's Floor`
+  - event streams, signals, analyst desks, execution pits
+- `Outside / Campus`
+  - stadium, events, unlockables, public scenes
 
-The building shell stays shared:
+Additional future departments:
 
-- shared navigation
-- shared player identity
-- shared office memory
-- shared building-level systems
+- `War Room`
+  - incident response, debugging, approvals, ops escalation
+- `R&D Lab`
+  - prompt experiments, model comparisons, benchmarks
+- `Legal / Compliance`
+  - permissions, policies, audit trails
+- `Studio / Broadcast Room`
+  - demos, presentations, voice/video outputs
+- `Watercooler / Commons`
+  - intentional cross-agent cross-talk space
 
-Each floor owns:
+## Core Principles
 
-- runtime connection state
-- roster hydration
-- session state
-- floor-specific props and signage
-- floor-specific policy and permissions
+- One runtime per floor.
+- One shared building shell above all floors.
+- Floor state is persistent and local to that floor.
+- Building systems are shared and runtime-neutral.
+- Cross-floor coordination is explicit, not accidental.
+- The gateway/runtime remains the source of truth for runtime-owned data.
 
 ## Why Floors
 
 Floors solve several problems at once:
 
 - they preserve backend neutrality
-- they stop multi-runtime support from collapsing into one flat roster
-- they let users understand "where" an agent comes from
-- they make room for real cross-runtime interactions later
-- they fit the existing office metaphor naturally
+- they prevent multi-runtime support from flattening into one undifferentiated roster
+- they make agent origin legible to the user
+- they let Office Systems map naturally onto place
+- they create a clean future path for cross-runtime coordination
 
 Instead of "choose one provider", the user can think:
 
-- OpenClaw is on the ground floor
+- OpenClaw is downstairs
 - Hermes is on the first floor
 - Custom is upstairs
-- Demo is the lobby or reception desk
+- Demo starts in the lobby
 
 ## Building Layers
 
 ### 1. Building Shell
 
-Persistent across all runtimes:
+Persistent across the whole app:
 
-- sidebar and navigation
-- profile / player identity
-- top-level settings
-- common event feed
-- building-wide bulletin board
-- progression / unlocks
+- top-level navigation
+- player identity
+- building map / floor switcher
+- building-wide settings
+- shared event feed
+- shared progression/unlocks
+- common Office Systems surfaces
+
+This layer should not depend on one runtime being selected.
 
 ### 2. Floor Runtime Surface
 
-Per-floor:
+Owned per floor:
 
 - provider binding
-- connection overlay
-- floor roster
-- local runtime metadata
-- floor-specific loading and failure state
+- runtime profile and connection settings
+- connection status and error state
+- hydrated roster for that floor
+- floor-local room state
+- floor signage / presentation metadata
 
 ### 3. Shared Building Systems
 
-Not tied to one runtime:
+Runtime-neutral systems that can reference one or many floors:
 
 - bulletin board
-- whiteboard / planning rooms
+- whiteboard
 - meeting rooms
-- QA workflows
+- QA systems
+- approvals
+- shared announcements
 - watercooler / commons
-- building announcements
 
 ### 4. Cross-Floor Coordination
 
-Later-phase:
+Later-phase systems:
 
 - cross-floor messaging
-- shared supervision chains
-- agent handoff tables
-- event-driven encounters
-- explicit "talk to agent on another floor" workflows
+- supervisor handoff chains
+- dispatch boards
+- agent encounter rules
+- multi-floor meetings
 
-## Candidate Floors
+## Runtime Rules
 
-### Lobby
-
-Use for:
-
-- onboarding
-- demo entry
-- visitor mode
-- building map
-- announcements
-
-### OpenClaw Floor
-
-Use for:
-
-- primary upstream runtime
-- default engineering floor
-- broadest compatibility baseline
-
-### Hermes Floor
-
-Use for:
-
-- orchestration
-- supervisor roles
-- managed multi-agent control
-- approval-heavy workflows
-
-### Custom Floor
-
-Use for:
-
-- downstream orchestrators
-- experimental runtimes
-- local stacks such as Vera
-
-### Training Floor
-
-Use for:
-
-- classrooms
-- auditorium
-- evals
-- teaching
-- distillation labs
-- onboarding drills
-
-This is a strong place for:
-
-- training runs
-- benchmark comparisons
-- prompt coaching
-- replay systems
-
-### Trader's Floor
-
-Use for:
-
-- event streams
-- finance / market dashboards
-- alert pits
-- strategy desks
-- analyst pods
-
-This is useful when real-time signals matter and the environment should feel kinetic.
-
-### Outside / Campus
-
-Use for:
-
-- stadium
-- events
-- celebrations
-- unlockable public spaces
-- seasonal or sponsor-driven scenes
-
-This fits the idea that not every "level" needs to be inside the main office tower.
-
-## Cross-Floor Agent Interaction
-
-The important shift is:
-
-- do not force everything through `config.json`
-- once runtimes are inside the building, create building-native interaction primitives
+Each floor has exactly one runtime binding at a time.
 
 Examples:
 
-- shared roster table
-- handoff board
-- supervisor desk that dispatches across floors
-- watercooler proximity chats
-- meeting room invites that can pull agents from multiple floors
+- `openclaw-ground`
+  - provider: `openclaw`
+- `hermes-first`
+  - provider: `hermes`
+- `custom-second`
+  - provider: `custom`
+- `demo-lobby`
+  - provider: `demo`
 
-This makes "Hermes supervising OpenClaw" a first-class building behavior instead of a config hack.
+A floor can be:
 
-## Progression / Unlock Ideas
+- configured but disconnected
+- connecting
+- connected
+- errored
 
-Possible unlock structure:
+Multiple floors may be loaded in the same session, but they should not share runtime connection state.
 
-- first login: lobby only
-- after setup: OpenClaw floor
-- after multi-runtime setup: Hermes floor
-- after usage thresholds: Training floor
-- after milestones: Trader's floor or stadium
+## State Ownership
 
-Other progression hooks:
+### Runtime-owned
 
-- jersey / floor colors
-- signage themes
-- badges and trophies
-- room upgrades
-- unlockable props and departments
+Still owned by the runtime/gateway:
 
-## Implementation Order
+- agent records
+- sessions
+- approvals
+- runtime files
+- runtime event streams
 
-Recommended sequence:
+### Studio-owned
 
-1. Persist "last known good" runtime state per provider
-2. Introduce floor registry model
-3. Load one roster per floor
-4. Add building map / floor switcher
-5. Add shared building systems
-6. Add cross-floor coordination tables
-7. Add unlockable floors and outside scenes
+Local Claw3D state should own:
 
-## Data Model Direction
+- floor registry
+- active floor
+- saved runtime profile per floor
+- last-known-good profile per floor
+- floor-local presentation preferences
+- building-level Office Systems state
 
-Minimal shape:
+This follows the existing architecture boundary in [ARCHITECTURE.md](/c:/Users/G/Desktop/Builds/sigilnet/isolation/Claw3D/ARCHITECTURE.md): Claw3D should not become the system of record for runtime agent state.
+
+## Floor Registry
+
+The first concrete implementation step should be a floor registry.
+
+Required fields:
+
+- floor id
+- label
+- provider
+- zone / level kind
+- connection profile key
+- whether the floor is enabled
+
+Suggested shape:
 
 ```ts
-type BuildingState = {
-  activeFloorId: string | null;
-  floors: Record<string, FloorState>;
-};
+type FloorProvider = "openclaw" | "hermes" | "custom" | "demo";
 
-type FloorState = {
-  id: string;
+type FloorId =
+  | "lobby"
+  | "openclaw-ground"
+  | "hermes-first"
+  | "custom-second"
+  | "training"
+  | "traders-floor"
+  | "campus";
+
+type FloorDefinition = {
+  id: FloorId;
   label: string;
-  provider: "openclaw" | "hermes" | "custom" | "demo";
-  runtimeUrl: string;
-  status: "disconnected" | "connecting" | "connected" | "error";
-  lastKnownGood: boolean;
-  roster: Array<{ id: string; name: string; role?: string | null }>;
+  provider: FloorProvider;
+  kind: "core" | "support" | "simulation" | "outside";
+  enabled: boolean;
+  runtimeProfileId: string | null;
 };
 ```
 
-This should remain generic enough for future providers.
+## Persistent Per-Floor Runtime State
+
+This should be the first real implementation slice after the doc.
+
+Each floor needs persistent local state for:
+
+- selected runtime profile
+- last-known-good connection profile
+- connection status
+- recent connect error
+- last successful roster snapshot metadata
+
+Suggested shape:
+
+```ts
+type FloorRuntimeState = {
+  floorId: FloorId;
+  provider: FloorProvider;
+  runtimeProfileId: string | null;
+  gatewayUrl: string | null;
+  status: "disconnected" | "connecting" | "connected" | "error";
+  lastKnownGoodAt: number | null;
+  lastErrorCode: string | null;
+  lastErrorMessage: string | null;
+};
+```
+
+Important rule:
+
+- floor-local runtime state should not be overwritten by switching to another floor
+
+## Multi-Provider Roster Loading
+
+Today Claw3D mostly thinks in one active roster.
+
+The next model should be:
+
+- one roster per floor
+- one hydration pipeline per floor
+- one selected active floor in the UI
+
+Suggested shape:
+
+```ts
+type FloorRosterEntry = {
+  id: string;
+  displayName: string;
+  runtimeName: string | null;
+  identityName: string | null;
+  sessionDisplayName: string | null;
+  role?: string | null;
+  status: "idle" | "running" | "error";
+};
+
+type FloorRosterState = {
+  floorId: FloorId;
+  loadedAt: number | null;
+  entries: FloorRosterEntry[];
+};
+```
+
+This matches recent runtime work:
+
+- preserve useful runtime and identity metadata
+- do not throw away `runtimeName`, `identityName`, or `sessionDisplayName`
+
+## Building Shell vs Floor Scene
+
+The office should split into:
+
+### Building shell
+
+- navigation
+- floor switcher
+- global overlays
+- building systems surfaces
+
+### Floor scene
+
+- runtime-backed roster
+- room layout for that floor
+- floor-local devices and props
+- floor-local agent simulation
+
+That prevents reconnecting or swapping floors from feeling like the whole app is remounting.
+
+## Cross-Floor Messaging Model
+
+Cross-floor coordination should be explicit.
+
+Do not infer it from raw runtime adjacency.
+
+Recommended primitives:
+
+- handoff board
+- floor inbox
+- supervisor dispatch
+- meeting invite
+- commons encounter
+
+Minimal event shape:
+
+```ts
+type CrossFloorMessage = {
+  id: string;
+  fromFloorId: FloorId;
+  fromAgentId: string;
+  toFloorId: FloorId;
+  toAgentId: string | null;
+  kind: "handoff" | "request" | "broadcast" | "meeting-invite";
+  subject: string;
+  body: string;
+  createdAt: number;
+};
+```
+
+Important rule:
+
+- cross-floor messaging is a building system
+- it should not require editing runtime config files directly
+
+## Office Systems Fit
+
+This architecture is meant to support the Office Systems roadmap, not compete with it.
+
+Good examples:
+
+- `Lobby`
+  - onboarding, demo, reception
+- `Training Floor`
+  - classrooms, evals, replay, distillation
+- `Trader's Floor`
+  - feeds, signals, alerts, analyst desks
+- `Outside / Campus`
+  - stadium and event spaces
+
+The pending stadium PR [#88](https://github.com/iamlukethedev/Claw3D/pull/88) should be treated as a future `Outside / Campus` scene, not as a blocker for the core floor/runtime model.
+
+## Progression / Unlocks
+
+Possible progression model:
+
+- first login
+  - lobby only
+- after first runtime setup
+  - OpenClaw floor
+- after multi-runtime setup
+  - Hermes floor
+- after usage thresholds
+  - Training floor
+- later milestones
+  - Trader's floor
+  - Campus / stadium
+
+Possible unlock outputs:
+
+- floor access
+- room access
+- signage themes
+- team/floor colors
+- props and trophies
+
+## Recommended Implementation Order
+
+1. Finalize multi-floor architecture doc
+2. Add floor registry model
+3. Add persistent per-floor runtime state
+4. Add multi-provider roster loading
+5. Add building shell + floor switcher
+6. Add cross-floor messaging primitives
+7. Build Office Systems on top
+
+This keeps floors foundational, and avoids building bulletin boards / meetings / QA on top of a single-runtime assumption that will just need to be broken later.
+
+## Immediate Non-Goals
+
+Not for the first slice:
+
+- full cross-floor conversation simulation
+- automatic agent movement across floors
+- deep unlock/economy system
+- multi-user tenancy
+- replacing the runtime as system of record
 
 ## Summary
 
-The provider seam should now evolve into a building model:
+Claw3D should evolve into:
 
-- one runtime per floor
-- one building shell above them
-- shared office systems between them
-- cross-floor coordination as a building-native capability
+- one building shell
+- multiple runtime-backed floors
+- one roster per floor
+- persistent floor-local state
+- shared building-native Office Systems
 
-That gives Claw3D a clean path from provider support to real Office Systems.
+That gives the project a clean path from merged runtime support into real Office Systems without collapsing everything back into one flat provider toggle.
