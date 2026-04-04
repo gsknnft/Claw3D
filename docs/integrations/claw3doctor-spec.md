@@ -235,6 +235,54 @@ much less painful.
 
 This is why it is sequenced ahead of deeper Office Systems feature work.
 
+## V1 Delivery Boundary
+
+`claw3doctor` v1 should be considered complete when it provides:
+
+- selected-profile diagnostics with optional per-profile probing
+- grouped terminal output with clear pass / warn / fail results
+- JSON output for automation and issue reporting
+- provider-aware checks for OpenClaw, Hermes, demo, and custom runtimes
+- common failure classification for transport and auth problems
+- concrete remediation for local, remote, tunneled, and adapter-backed setups
+
+This keeps v1 reviewable as deployment diagnostics rather than letting it
+turn into a full runtime orchestration project.
+
+## V2 Expansion Backlog
+
+After v1 lands, the next doctor-specific expansion should focus on better
+diagnosis depth and better operator ergonomics rather than broader scope.
+
+### Higher-Signal Runtime Heuristics
+
+- deeper OpenClaw pairing and device-approval detection
+- stronger close-code interpretation from real-world failures
+- provider-specific contract validation for demo and custom runtimes
+- better wrong-model / wrong-adapter mismatch detection
+
+### Tunnel / Proxy Guidance
+
+- Cloudflare-specific websocket and origin remediation
+- Tailscale-specific remote deployment guidance
+- reverse-proxy fingerprinting and likely-misconfiguration hints
+- public-host checks when auth or secure-context expectations are missing
+
+### Output / Workflow Improvements
+
+- richer terminal presentation
+- issue-template or bundle-friendly export
+- in-app diagnostics panel later, reusing the same JSON report
+- optional doctor autofix for safe configuration repairs
+
+### Runtime-Profile Follow-Through
+
+`claw3doctor` v2 should also benefit from the separate runtime-profile work:
+
+- simultaneous runtime profile visibility
+- per-profile health history
+- floor-to-profile diagnosis once Office Systems binding is live
+
 ## Follow-Up Docs
 
 After this spec, the next planning doc should be:

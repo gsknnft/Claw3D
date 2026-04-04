@@ -455,6 +455,31 @@ If this roadmap is used for implementation planning, the best next concrete docs
 Those create the strongest foundation for future hierarchy, progression,
 simulation layers, and enterprise-ready adoption.
 
+## Diagnostics Roadmap Split
+
+To keep diagnostics aligned with the platform work without turning them into
+an unbounded tooling branch, treat `claw3doctor` in two phases:
+
+### `claw3doctor` v1
+
+- first-pass deployment diagnostics
+- runtime profile awareness
+- grouped terminal output
+- JSON output
+- OpenClaw / Hermes / demo / custom provider checks
+- tunnel, auth, and close-code remediation
+
+### `claw3doctor` v2
+
+- deeper OpenClaw pairing/device heuristics
+- stronger Cloudflare / Tailscale / reverse-proxy fingerprints
+- richer export and issue-bundle workflows
+- in-app diagnostics surface later
+- floor-to-profile and multi-runtime diagnostics once runtime binding matures
+
+This keeps the current branch reviewable while preserving the next layer of
+operator-focused work.
+
 ## Summary
 
 Claw3D gets stronger when the office becomes the place where work actually happens.
