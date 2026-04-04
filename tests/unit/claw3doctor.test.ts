@@ -3,9 +3,12 @@ import { describe, expect, it } from "vitest";
 import {
   buildCustomRuntimeWarnings,
   buildDoctorJsonReport,
+  buildGatewayFailureActions,
+  buildProfileWarnings,
   buildOpenClawWarnings,
   DOCTOR_STATUSES,
   buildGatewayWarnings,
+  formatDoctorReport,
   resolveRuntimeContext,
   shouldRunCustomChecks,
   shouldRunDemoChecks,
@@ -110,6 +113,39 @@ describe("claw3doctor core", () => {
     );
   });
 
+  it("warns when multiple runtime profiles share the same endpoint", () => {
+    expect(
+      buildProfileWarnings({
+        runtimeContext: {
+          profiles: {
+            openclaw: { url: "ws://localhost:18789", token: "a" },
+            hermes: { url: "ws://localhost:18789", token: "" },
+            demo: { url: "ws://localhost:28789", token: "" },
+          },
+        },
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("same endpoint"),
+      ]),
+    );
+  });
+
+  it("builds remediation actions from tunnel and pairing style failures", () => {
+    expect(
+      buildGatewayFailureActions({
+        adapterType: "openclaw",
+        message: "Unexpected HTTP 401 during WebSocket upgrade. pairing required 1008",
+        gatewayUrl: "wss://demo.tailnet.ts.net/gateway",
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("openclaw devices list"),
+        expect.stringContaining("direct local or LAN access"),
+      ]),
+    );
+  });
+
   it("summarizes checks by worst status", () => {
     expect(
       summarizeChecks([
@@ -176,5 +212,37 @@ describe("claw3doctor core", () => {
       },
       checks: [{ label: "Gateway token" }],
     });
+  });
+
+  it("formats a grouped terminal report with configured profiles", () => {
+    const report = formatDoctorReport({
+      summary: DOCTOR_STATUSES.warn,
+      runtimeContext: {
+        adapterType: "hermes",
+        gatewayUrl: "ws://localhost:18789",
+        token: "",
+        tokenConfigured: false,
+        profiles: {
+          hermes: { url: "ws://localhost:18789", token: "" },
+          openclaw: { url: "ws://localhost:28789", token: "secret" },
+        },
+      },
+      paths: {
+        stateDir: "C:/tmp/.openclaw",
+        settingsPath: "C:/tmp/.openclaw/claw3d/settings.json",
+      },
+      checks: [
+        {
+          category: "Runtime profiles",
+          status: DOCTOR_STATUSES.warn,
+          label: "Profile collision",
+          message: "Multiple runtime profiles share the same endpoint.",
+        },
+      ],
+    });
+
+    expect(report).toContain("Configured profiles:");
+    expect(report).toContain("Runtime profiles");
+    expect(report).toContain("Check counts:");
   });
 });

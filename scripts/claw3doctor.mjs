@@ -7,6 +7,8 @@ import { WebSocket } from "ws";
 import {
   buildCustomRuntimeWarnings,
   buildDoctorJsonReport,
+  buildGatewayFailureActions,
+  buildProfileWarnings,
   DOCTOR_STATUSES,
   buildGatewayWarnings,
   buildOpenClawWarnings,
@@ -77,22 +79,25 @@ const formatErrorMessage = (error, fallback) => {
   return error.message || error.name || fallback;
 };
 
-const checkPass = (label, message, actions) => ({
+const checkPass = (category, label, message, actions) => ({
   status: DOCTOR_STATUSES.pass,
+  category,
   label,
   message,
   ...(actions?.length ? { actions } : {}),
 });
 
-const checkWarn = (label, message, actions) => ({
+const checkWarn = (category, label, message, actions) => ({
   status: DOCTOR_STATUSES.warn,
+  category,
   label,
   message,
   ...(actions?.length ? { actions } : {}),
 });
 
-const checkFail = (label, message, actions) => ({
+const checkFail = (category, label, message, actions) => ({
   status: DOCTOR_STATUSES.fail,
+  category,
   label,
   message,
   ...(actions?.length ? { actions } : {}),
@@ -226,28 +231,35 @@ async function main() {
   checks.push(
     runtimeContext.gatewayUrl
       ? checkPass(
+          "Runtime profiles",
           "Runtime profile",
           `${runtimeContext.adapterType} selected at ${runtimeContext.gatewayUrl}`,
         )
-      : checkFail("Runtime profile", "No runtime profile / gateway URL is configured.", [
+      : checkFail("Runtime profiles", "Runtime profile", "No runtime profile / gateway URL is configured.", [
           "Set the gateway URL in Claw3D connect/settings before retrying.",
         ]),
   );
 
   checks.push(
     runtimeContext.tokenConfigured
-      ? checkPass("Gateway token", "A gateway token is configured for the selected profile.")
-      : checkWarn("Gateway token", "No gateway token is configured for the selected profile.", [
+      ? checkPass("Runtime profiles", "Gateway token", "A gateway token is configured for the selected profile.")
+      : checkWarn("Runtime profiles", "Gateway token", "No gateway token is configured for the selected profile.", [
           "If this backend requires token auth, set the upstream token in Claw3D settings or openclaw.json.",
         ]),
   );
+
+  for (const warning of buildProfileWarnings({ runtimeContext })) {
+    checks.push(checkWarn("Runtime profiles", "Profile collision", warning, [
+      "Assign distinct local ports or URLs if you want OpenClaw, Hermes, and demo running simultaneously instead of swapping one backend onto the same endpoint.",
+    ]));
+  }
 
   for (const warning of buildGatewayWarnings({
     gatewayUrl: runtimeContext.gatewayUrl,
     studioAccessToken: trim(env.STUDIO_ACCESS_TOKEN),
     host: trim(env.HOST),
   })) {
-    checks.push(checkWarn("Gateway hints", warning));
+    checks.push(checkWarn("Gateway access", "Gateway hints", warning));
   }
 
   if (runtimeContext.adapterType === "openclaw") {
@@ -255,7 +267,7 @@ async function main() {
       gatewayUrl: runtimeContext.gatewayUrl,
       tokenConfigured: runtimeContext.tokenConfigured,
     })) {
-      checks.push(checkWarn("OpenClaw hints", warning, [
+      checks.push(checkWarn("OpenClaw", "OpenClaw hints", warning, [
         "If the browser/device is not yet approved, check `openclaw devices list` and approve the pending device before retrying the remote connection.",
       ]));
     }
@@ -267,7 +279,7 @@ async function main() {
       allowlist: trim(env.CUSTOM_RUNTIME_ALLOWLIST) || trim(env.UPSTREAM_ALLOWLIST),
       nodeEnv: trim(env.NODE_ENV),
     })) {
-      checks.push(checkWarn("Custom runtime hints", warning));
+      checks.push(checkWarn("Custom runtime", "Custom runtime hints", warning));
     }
   }
 
@@ -276,21 +288,37 @@ async function main() {
       const customProbe = await probeCustomRuntimeHealth(runtimeContext.gatewayUrl);
       checks.push(
         customProbe.ok
-          ? checkPass("Custom runtime reachability", customProbe.message)
-          : checkFail("Custom runtime reachability", customProbe.message, [
-              "Verify the custom runtime base URL is correct and exposes /health or /registry over HTTP.",
-              "If this runtime sits behind the Studio custom proxy, verify CUSTOM_RUNTIME_ALLOWLIST / UPSTREAM_ALLOWLIST for the target host.",
-            ]),
+          ? checkPass("Custom runtime", "Custom runtime reachability", customProbe.message)
+          : checkFail(
+              "Custom runtime",
+              "Custom runtime reachability",
+              customProbe.message,
+              buildGatewayFailureActions({
+                adapterType: runtimeContext.adapterType,
+                message: customProbe.message,
+                gatewayUrl: runtimeContext.gatewayUrl,
+              }).concat([
+                "If this runtime sits behind the Studio custom proxy, verify CUSTOM_RUNTIME_ALLOWLIST / UPSTREAM_ALLOWLIST for the target host.",
+              ]),
+            ),
       );
     } else {
       const wsProbe = await probeWebSocket(runtimeContext.gatewayUrl);
       checks.push(
         wsProbe.ok
-          ? checkPass("Gateway reachability", wsProbe.message)
-          : checkFail("Gateway reachability", wsProbe.message, [
-              "Verify the configured gateway URL is correct and the backend is listening.",
-              "If this is a public/tunneled deployment, compare direct local/LAN behavior before debugging deeper.",
-            ]),
+          ? checkPass("Gateway access", "Gateway reachability", wsProbe.message)
+          : checkFail(
+              "Gateway access",
+              "Gateway reachability",
+              wsProbe.message,
+              buildGatewayFailureActions({
+                adapterType: runtimeContext.adapterType,
+                message: wsProbe.message,
+                gatewayUrl: runtimeContext.gatewayUrl,
+              }).concat([
+                "Verify the configured gateway URL is correct and the backend is listening.",
+              ]),
+            ),
       );
     }
   }
@@ -300,8 +328,8 @@ async function main() {
   if (shouldRunOpenClawChecks({ runtimeContext, openclawConfigExists })) {
     checks.push(
       openclawConfigExists
-        ? checkPass("OpenClaw config", `Found ${openclawConfigPath}.`)
-        : checkWarn("OpenClaw config", `No openclaw.json found at ${openclawConfigPath}.`, [
+        ? checkPass("OpenClaw", "OpenClaw config", `Found ${openclawConfigPath}.`)
+        : checkWarn("OpenClaw", "OpenClaw config", `No openclaw.json found at ${openclawConfigPath}.`, [
             "If you expect a local OpenClaw default, verify OPENCLAW_STATE_DIR or create openclaw.json.",
           ]),
     );
@@ -310,8 +338,8 @@ async function main() {
     const versionLooksValid = /^OpenClaw\s+/i.test(version);
     checks.push(
       versionLooksValid
-        ? checkPass("OpenClaw version", version)
-        : checkWarn("OpenClaw version", version, [
+        ? checkPass("OpenClaw", "OpenClaw version", version)
+        : checkWarn("OpenClaw", "OpenClaw version", version, [
             "Install OpenClaw or ensure it is available on PATH if this machine should run it directly.",
           ]),
     );
@@ -321,6 +349,7 @@ async function main() {
     const configuredPort = trim(env.DEMO_ADAPTER_PORT) || "18789";
     checks.push(
       checkPass(
+        "Demo gateway",
         "Demo gateway config",
         `Demo mode expects the mock gateway on ws://localhost:${configuredPort}.`,
         ["Run `npm run demo-gateway` if you want a no-runtime office smoke test."],
@@ -332,6 +361,7 @@ async function main() {
     const hermes = await detectHermesModelHealth();
     checks.push(
       checkPass(
+        "Hermes",
         "Hermes adapter config",
         `Hermes API target ${hermes.apiUrl} | model ${hermes.model} | key ${
           hermes.apiKeyConfigured ? "configured" : "missing"
@@ -345,6 +375,7 @@ async function main() {
         : [];
       checks.push(
         checkPass(
+          "Hermes",
           "Hermes API",
           models.length > 0
             ? `Hermes API reachable. Reported models: ${models.join(", ")}`
@@ -353,20 +384,20 @@ async function main() {
       );
       if (models.length > 0 && !models.includes(hermes.model)) {
         checks.push(
-          checkWarn("Hermes model", `Configured model "${hermes.model}" was not returned by /v1/models.`, [
+          checkWarn("Hermes", "Hermes model", `Configured model "${hermes.model}" was not returned by /v1/models.`, [
             "Set HERMES_MODEL to one of the reported model ids or update the Hermes API configuration.",
           ]),
         );
       }
     } else if (hermes.probe.status === 401) {
       checks.push(
-        checkFail("Hermes API", "Hermes API returned HTTP 401.", [
+        checkFail("Hermes", "Hermes API", "Hermes API returned HTTP 401.", [
           "Verify HERMES_API_KEY and confirm the adapter is loading the same .env values you expect.",
         ]),
       );
     } else {
       checks.push(
-        checkFail("Hermes API", hermes.probe.text || "Hermes API probe failed.", [
+        checkFail("Hermes", "Hermes API", hermes.probe.text || "Hermes API probe failed.", [
           "Start the Hermes API server and verify /v1/models responds before starting the adapter.",
         ]),
       );

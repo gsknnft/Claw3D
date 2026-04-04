@@ -113,6 +113,28 @@ export const buildGatewayWarnings = ({ gatewayUrl, studioAccessToken = "", host 
   return warnings;
 };
 
+export const buildProfileWarnings = ({ runtimeContext }) => {
+  const warnings = [];
+  const urlToAdapters = new Map();
+  for (const [adapterType, profile] of Object.entries(runtimeContext?.profiles ?? {})) {
+    const url = trimString(profile?.url);
+    if (!url) continue;
+    const key = url.toLowerCase();
+    const adapters = urlToAdapters.get(key) ?? [];
+    adapters.push(adapterType);
+    urlToAdapters.set(key, adapters);
+  }
+
+  for (const [url, adapters] of urlToAdapters.entries()) {
+    if (adapters.length < 2) continue;
+    warnings.push(
+      `Multiple runtime profiles share the same endpoint (${url}): ${adapters.join(", ")}. That is fine for one-runtime-at-a-time local use, but simultaneous runtimes need distinct URLs or ports.`,
+    );
+  }
+
+  return warnings;
+};
+
 export const buildOpenClawWarnings = ({ gatewayUrl, tokenConfigured = false }) => {
   const warnings = [];
   const url = trimString(gatewayUrl);
@@ -189,6 +211,42 @@ export const buildCustomRuntimeWarnings = ({
   return warnings;
 };
 
+export const buildGatewayFailureActions = ({ adapterType, message = "", gatewayUrl = "" }) => {
+  const actions = [];
+  const normalized = trimString(message).toLowerCase();
+  const url = trimString(gatewayUrl);
+
+  if (normalized.includes("econnrefused") || normalized.includes("timed out")) {
+    actions.push("Verify the backend is actually listening on the configured host and port before retrying from Claw3D.");
+  }
+
+  if (normalized.includes("1011")) {
+    actions.push("If this is OpenClaw behind a reverse proxy or tunnel, verify websocket upgrade handling and compare direct local/LAN behavior before assuming the runtime itself is broken.");
+  }
+
+  if (normalized.includes("1012")) {
+    actions.push("A 1012-style close usually means the upstream is restarting or unavailable temporarily. Retry after checking the backend service logs.");
+  }
+
+  if (normalized.includes("1008") || normalized.includes("pairing required") || normalized.includes("approve")) {
+    actions.push("For OpenClaw, check pending device/browser approval with `openclaw devices list` and approve the request before retrying the remote browser session.");
+  }
+
+  if (normalized.includes("401") || normalized.includes("403") || normalized.includes("unexpected http 401")) {
+    actions.push("Recheck the configured token/auth path. The gateway or proxy is rejecting the connection before the office can load.");
+  }
+
+  if (url && TUNNEL_HOST_PATTERN.test(url)) {
+    actions.push("Because this endpoint looks tunnel-backed, reproduce once via direct local or LAN access to separate runtime problems from tunnel/proxy problems.");
+  }
+
+  if (adapterType === "custom") {
+    actions.push("Custom runtimes should answer over HTTP on /health or /registry, not just a raw websocket endpoint.");
+  }
+
+  return [...new Set(actions)];
+};
+
 export const summarizeChecks = (checks) => {
   let hasFail = false;
   let hasWarn = false;
@@ -214,21 +272,48 @@ export const shouldRunDemoChecks = ({ runtimeContext, env = process.env }) =>
 export const shouldRunCustomChecks = ({ runtimeContext }) => runtimeContext.adapterType === "custom";
 
 export const formatDoctorReport = ({ summary, runtimeContext, paths, checks }) => {
+  const summaryCounts = {
+    pass: checks.filter((check) => check.status === DOCTOR_STATUSES.pass).length,
+    warn: checks.filter((check) => check.status === DOCTOR_STATUSES.warn).length,
+    fail: checks.filter((check) => check.status === DOCTOR_STATUSES.fail).length,
+  };
+  const groupedChecks = new Map();
+  for (const check of checks) {
+    const category = check.category || "General";
+    const entries = groupedChecks.get(category) ?? [];
+    entries.push(check);
+    groupedChecks.set(category, entries);
+  }
   const lines = [];
-  lines.push(`Claw3Doctor: ${summary}`);
+  lines.push("+--------------------------------------------------+");
+  lines.push(`| Claw3Doctor ${summary.padEnd(35, " ")}|`);
+  lines.push("+--------------------------------------------------+");
   lines.push("");
   lines.push(`Runtime provider: ${runtimeContext.adapterType}`);
   lines.push(`Gateway URL: ${runtimeContext.gatewayUrl || "(not configured)"}`);
   lines.push(`Gateway token: ${runtimeContext.tokenConfigured ? "configured" : "missing"}`);
   lines.push(`State dir: ${paths.stateDir}`);
   lines.push(`Studio settings: ${paths.settingsPath}`);
+  const configuredProfiles = Object.entries(runtimeContext.profiles ?? {});
+  if (configuredProfiles.length > 0) {
+    lines.push("Configured profiles:");
+    for (const [adapterType, profile] of configuredProfiles) {
+      lines.push(`  - ${adapterType}: ${profile.url}`);
+    }
+  }
+  lines.push(
+    `Check counts: ${summaryCounts.pass} pass, ${summaryCounts.warn} warn, ${summaryCounts.fail} fail`,
+  );
   lines.push("");
-  for (const check of checks) {
-    lines.push(`[${check.status.toLowerCase()}] ${check.label}: ${check.message}`);
+  for (const [category, categoryChecks] of groupedChecks.entries()) {
+    lines.push(`${category}`);
+    for (const check of categoryChecks) {
+      lines.push(`  [${check.status.toLowerCase()}] ${check.label}: ${check.message}`);
+    }
+    lines.push("");
   }
   const actions = checks.flatMap((check) => check.actions ?? []);
   if (actions.length > 0) {
-    lines.push("");
     lines.push("Suggested next actions:");
     actions.forEach((action, index) => {
       lines.push(`${index + 1}. ${action}`);
@@ -243,4 +328,9 @@ export const buildDoctorJsonReport = ({ summary, runtimeContext, paths, checks }
   runtimeContext,
   paths,
   checks,
+  counts: {
+    pass: checks.filter((check) => check.status === DOCTOR_STATUSES.pass).length,
+    warn: checks.filter((check) => check.status === DOCTOR_STATUSES.warn).length,
+    fail: checks.filter((check) => check.status === DOCTOR_STATUSES.fail).length,
+  },
 });
