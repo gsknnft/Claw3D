@@ -437,3 +437,34 @@ export const buildDoctorJsonReport = ({ summary, runtimeContext, paths, checks }
     fail: checks.filter((check) => check.status === DOCTOR_STATUSES.fail).length,
   },
 });
+
+/**
+ * Parse CLI argv into structured doctor args.
+ * Exported so the flag behaviour can be unit tested without spawning a process.
+ */
+export const parseDoctorArgs = (argv) => {
+  const args = {
+    json: false,
+    allProfiles: false,
+    profile: null,
+  };
+  for (let index = 0; index < argv.length; index += 1) {
+    const entry = argv[index];
+    if (entry === "--json") {
+      args.json = true;
+      continue;
+    }
+    if (entry === "--all-profiles") {
+      args.allProfiles = true;
+      continue;
+    }
+    if (entry === "--profile") {
+      const next = trimString(argv[index + 1] ?? "").toLowerCase();
+      if (next) {
+        args.profile = next;
+        index += 1;
+      }
+    }
+  }
+  return args;
+};

@@ -10,6 +10,7 @@ import {
   DOCTOR_STATUSES,
   buildGatewayWarnings,
   formatDoctorReport,
+  parseDoctorArgs,
   resolveRuntimeContext,
   shouldRunCustomChecks,
   shouldRunDemoChecks,
@@ -275,5 +276,76 @@ describe("claw3doctor core", () => {
     expect(report).toContain("Configured profiles:");
     expect(report).toContain("Runtime profiles");
     expect(report).toContain("Check counts:");
+  });
+});
+
+describe("parseDoctorArgs", () => {
+  it("returns defaults when no flags are supplied", () => {
+    expect(parseDoctorArgs([])).toEqual({ json: false, allProfiles: false, profile: null });
+  });
+
+  it("sets json flag", () => {
+    expect(parseDoctorArgs(["--json"])).toMatchObject({ json: true });
+  });
+
+  it("sets allProfiles flag", () => {
+    expect(parseDoctorArgs(["--all-profiles"])).toMatchObject({ allProfiles: true, profile: null });
+  });
+
+  it("sets profile to lower-cased value", () => {
+    expect(parseDoctorArgs(["--profile", "Hermes"])).toMatchObject({ profile: "hermes", allProfiles: false });
+  });
+
+  it("ignores --profile flag when no value follows", () => {
+    expect(parseDoctorArgs(["--profile"])).toMatchObject({ profile: null });
+  });
+
+  it("combines flags", () => {
+    expect(parseDoctorArgs(["--json", "--profile", "openclaw"])).toEqual({
+      json: true,
+      allProfiles: false,
+      profile: "openclaw",
+    });
+  });
+});
+
+describe("adapterInScope scoping semantics", () => {
+  // Mirror the adapterInScope helper used in claw3doctor.mjs so the logic can
+  // be verified independently of the full CLI entrypoint.
+  const makeAdapterInScope =
+    (args: { allProfiles: boolean; profile: string | null }) =>
+    (adapterType: string, defaultBehavior: boolean): boolean => {
+      if (args.allProfiles) return true;
+      if (args.profile) return args.profile === adapterType;
+      return defaultBehavior;
+    };
+
+  it("default (no flags): delegates to defaultBehavior", () => {
+    const inScope = makeAdapterInScope({ allProfiles: false, profile: null });
+    expect(inScope("openclaw", true)).toBe(true);
+    expect(inScope("openclaw", false)).toBe(false);
+    expect(inScope("hermes", false)).toBe(false);
+  });
+
+  it("--profile hermes: only hermes is in scope", () => {
+    const inScope = makeAdapterInScope({ allProfiles: false, profile: "hermes" });
+    expect(inScope("hermes", false)).toBe(true);
+    expect(inScope("openclaw", true)).toBe(false); // openclaw would default to true but is suppressed
+    expect(inScope("demo", true)).toBe(false);
+    expect(inScope("custom", false)).toBe(false);
+  });
+
+  it("--profile openclaw: only openclaw is in scope", () => {
+    const inScope = makeAdapterInScope({ allProfiles: false, profile: "openclaw" });
+    expect(inScope("openclaw", false)).toBe(true);
+    expect(inScope("hermes", true)).toBe(false);
+  });
+
+  it("--all-profiles: every adapter is in scope regardless of default", () => {
+    const inScope = makeAdapterInScope({ allProfiles: true, profile: null });
+    expect(inScope("hermes", false)).toBe(true);
+    expect(inScope("openclaw", false)).toBe(true);
+    expect(inScope("demo", false)).toBe(true);
+    expect(inScope("custom", false)).toBe(true);
   });
 });

@@ -14,6 +14,7 @@ import {
   buildGatewayWarnings,
   buildOpenClawWarnings,
   formatDoctorReport,
+  parseDoctorArgs,
   resolveRuntimeContext,
   shouldRunCustomChecks,
   shouldRunDemoChecks,
@@ -105,33 +106,6 @@ const checkFail = (category, label, message, actions) => ({
 });
 
 const trim = (value) => (typeof value === "string" ? value.trim() : "");
-
-const parseDoctorArgs = (argv) => {
-  const args = {
-    json: false,
-    allProfiles: false,
-    profile: null,
-  };
-  for (let index = 0; index < argv.length; index += 1) {
-    const entry = argv[index];
-    if (entry === "--json") {
-      args.json = true;
-      continue;
-    }
-    if (entry === "--all-profiles") {
-      args.allProfiles = true;
-      continue;
-    }
-    if (entry === "--profile") {
-      const next = trim(argv[index + 1]).toLowerCase();
-      if (next) {
-        args.profile = next;
-        index += 1;
-      }
-    }
-  }
-  return args;
-};
 
 const probeWebSocket = async (url, timeoutMs = 3500) =>
   await new Promise((resolve) => {
@@ -285,6 +259,18 @@ async function main() {
   });
   const workspace = detectWorkspaceState();
 
+  /**
+   * Returns whether provider-specific checks for `adapterType` should run.
+   * When --profile <adapter> is set, only that adapter is in scope.
+   * When --all-profiles is set, all adapters are in scope.
+   * Otherwise falls back to `defaultBehavior` (the existing shouldRun* predicate).
+   */
+  const adapterInScope = (adapterType, defaultBehavior) => {
+    if (args.allProfiles) return true;
+    if (args.profile) return args.profile === adapterType;
+    return defaultBehavior;
+  };
+
   const checks = [];
 
   checks.push(
@@ -367,7 +353,7 @@ async function main() {
     checks.push(checkWarn("Gateway access", "Gateway hints", warning));
   }
 
-  if (runtimeContext.adapterType === "openclaw") {
+  if (adapterInScope("openclaw", runtimeContext.adapterType === "openclaw")) {
     for (const warning of buildOpenClawWarnings({
       gatewayUrl: runtimeContext.gatewayUrl,
       tokenConfigured: runtimeContext.tokenConfigured,
@@ -378,7 +364,7 @@ async function main() {
     }
   }
 
-  if (shouldRunCustomChecks({ runtimeContext })) {
+  if (adapterInScope("custom", shouldRunCustomChecks({ runtimeContext }))) {
     for (const warning of buildCustomRuntimeWarnings({
       gatewayUrl: runtimeContext.gatewayUrl,
       allowlist: trim(env.CUSTOM_RUNTIME_ALLOWLIST) || trim(env.UPSTREAM_ALLOWLIST),
@@ -454,7 +440,7 @@ async function main() {
     );
   }
 
-  if (shouldRunDemoChecks({ runtimeContext, env })) {
+  if (adapterInScope("demo", shouldRunDemoChecks({ runtimeContext, env }))) {
     const configuredPort = trim(env.DEMO_ADAPTER_PORT) || "18789";
     checks.push(
       checkPass(
@@ -466,7 +452,7 @@ async function main() {
     );
   }
 
-  if (shouldRunHermesChecks({ runtimeContext, env })) {
+  if (adapterInScope("hermes", shouldRunHermesChecks({ runtimeContext, env }))) {
     const hermes = await detectHermesModelHealth();
     checks.push(
       checkPass(
