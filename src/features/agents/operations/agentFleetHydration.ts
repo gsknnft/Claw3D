@@ -113,82 +113,6 @@ const resolveAgentsListFromHelloSnapshot = (snapshot: unknown): AgentsListResult
   };
 };
 
-const resolveAgentsListFromConfigSnapshot = (
-  configSnapshot: GatewayModelPolicySnapshot | null,
-  fallback?: { defaultId?: string; mainKey?: string; scope?: string } | null
-): AgentsListResult | null => {
-  const config = configSnapshot?.config;
-  if (!isRecord(config)) return null;
-  const agentsBlock = isRecord(config.agents) ? config.agents : null;
-  const list = Array.isArray(agentsBlock?.list) ? agentsBlock.list : [];
-  const agents = list.flatMap((entry) => {
-    if (!isRecord(entry)) return [];
-    const id = typeof entry.id === "string" ? entry.id.trim() : "";
-    if (!id) return [];
-    const name = typeof entry.name === "string" ? entry.name.trim() : "";
-    const identity = isRecord(entry.identity) ? entry.identity : null;
-    const identityName = typeof identity?.name === "string" ? identity.name.trim() : "";
-    return [
-      {
-        id,
-        ...(name ? { name } : {}),
-        ...(identityName ? { identity: { name: identityName } } : {}),
-      },
-    ];
-  });
-  if (agents.length === 0) return null;
-  const defaultId =
-    agents.find((entry, index) => {
-      const raw = list[index];
-      return isRecord(raw) && raw.default === true;
-    })?.id ?? fallback?.defaultId?.trim() ?? agents[0]?.id ?? "main";
-  const sessionBlock = isRecord(config.session) ? config.session : null;
-  const mainKey =
-    typeof sessionBlock?.mainKey === "string"
-      ? sessionBlock.mainKey.trim() || fallback?.mainKey?.trim() || "main"
-      : fallback?.mainKey?.trim() || "main";
-  const scope =
-    typeof sessionBlock?.scope === "string"
-      ? sessionBlock.scope.trim() || fallback?.scope?.trim() || undefined
-      : fallback?.scope?.trim() || undefined;
-  return {
-    defaultId,
-    mainKey,
-    ...(scope ? { scope } : {}),
-    agents,
-  };
-};
-
-const mergeAgentsListResults = (
-  primary: AgentsListResult | null,
-  secondary: AgentsListResult | null
-): AgentsListResult | null => {
-  if (!primary && !secondary) return null;
-  if (!primary) return secondary;
-  if (!secondary) return primary;
-  const byId = new Map<string, AgentsListResult["agents"][number]>();
-  for (const agent of secondary.agents) {
-    byId.set(agent.id, agent);
-  }
-  for (const agent of primary.agents) {
-    const existing = byId.get(agent.id);
-    byId.set(agent.id, {
-      ...existing,
-      ...agent,
-      identity: {
-        ...(existing?.identity ?? {}),
-        ...(agent.identity ?? {}),
-      },
-    });
-  }
-  return {
-    defaultId: primary.defaultId?.trim() || secondary.defaultId?.trim() || "main",
-    mainKey: primary.mainKey?.trim() || secondary.mainKey?.trim() || "main",
-    scope: primary.scope?.trim() || secondary.scope?.trim() || undefined,
-    agents: Array.from(byId.values()),
-  };
-};
-
 export type HydrateAgentFleetResult = {
   seeds: AgentStoreSeed[];
   sessionCreatedAgentIds: string[];
@@ -247,26 +171,19 @@ export async function hydrateAgentFleetFromGateway(params: {
   const helloSnapshotFallback = resolveAgentsListFromHelloSnapshot(
     params.client.getLastHello?.()?.snapshot
   );
-  const configSnapshotFallback = resolveAgentsListFromConfigSnapshot(configSnapshot ?? null, {
-    defaultId: helloSnapshotFallback?.defaultId,
-    mainKey: helloSnapshotFallback?.mainKey,
-    scope: helloSnapshotFallback?.scope,
-  });
-  const mergedFallback = mergeAgentsListResults(helloSnapshotFallback, configSnapshotFallback);
   let agentsResult: AgentsListResult;
   try {
-    const liveAgentsResult = (await params.client.call("agents.list", {})) as AgentsListResult;
-    agentsResult = mergeAgentsListResults(liveAgentsResult, mergedFallback) ?? liveAgentsResult;
+    agentsResult = (await params.client.call("agents.list", {})) as AgentsListResult;
   } catch (err) {
-    if (mergedFallback) {
-      agentsResult = mergedFallback;
+    if (helloSnapshotFallback) {
+      agentsResult = helloSnapshotFallback;
     } else {
       throw err;
     }
   }
   if (!Array.isArray(agentsResult?.agents) || agentsResult.agents.length === 0) {
-    if (mergedFallback) {
-      agentsResult = mergedFallback;
+    if (helloSnapshotFallback) {
+      agentsResult = helloSnapshotFallback;
     }
   }
   agentsResult = {
