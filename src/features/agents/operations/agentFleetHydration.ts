@@ -315,38 +315,17 @@ export async function hydrateAgentFleetFromGateway(params: {
     agentsResult.agents.map(async (agent) => {
       try {
         const expectedMainKey = buildAgentMainSessionKey(agent.id, mainKey);
-        const strictSessions = (await params.client.call("sessions.list", {
+        const sessions = (await params.client.call("sessions.list", {
           agentId: agent.id,
           includeGlobal: false,
           includeUnknown: false,
           search: expectedMainKey,
           limit: 4,
         })) as SessionsListResult;
-        const strictEntries = Array.isArray(strictSessions.sessions) ? strictSessions.sessions : [];
-        const strictMainEntry =
-          strictEntries.find((entry) => isSameSessionKey(entry.key ?? "", expectedMainKey)) ?? null;
-        if (strictMainEntry) {
-          mainSessionKeyByAgent.set(agent.id, strictMainEntry);
-          return;
-        }
-
-        const fallbackSessions = (await params.client.call("sessions.list", {
-          agentId: agent.id,
-          includeGlobal: true,
-          includeUnknown: false,
-          limit: 32,
-        })) as SessionsListResult;
-        const fallbackEntries = Array.isArray(fallbackSessions.sessions)
-          ? fallbackSessions.sessions
-          : [];
-        const globalEntry =
-          fallbackEntries.find((entry) => isSameSessionKey(entry.key ?? "", "global")) ?? null;
-        const directEntry =
-          fallbackEntries.find((entry) => {
-            const key = entry.key ?? "";
-            return key.startsWith(`agent:${agent.id}:`) && !isSameSessionKey(key, "global");
-          }) ?? null;
-        mainSessionKeyByAgent.set(agent.id, directEntry ?? globalEntry ?? null);
+        const entries = Array.isArray(sessions.sessions) ? sessions.sessions : [];
+        const mainEntry =
+          entries.find((entry) => isSameSessionKey(entry.key ?? "", expectedMainKey)) ?? null;
+        mainSessionKeyByAgent.set(agent.id, mainEntry);
       } catch (err) {
         if (!params.isDisconnectLikeError(err)) {
           logError("Failed to list sessions while resolving agent session.", err);
@@ -362,7 +341,8 @@ export async function hydrateAgentFleetFromGateway(params: {
     const sessionKeys = Array.from(
       new Set(
         agentsResult.agents
-          .map((agent) => mainSessionKeyByAgent.get(agent.id)?.key ?? "")
+          .filter((agent) => Boolean(mainSessionKeyByAgent.get(agent.id)))
+          .map((agent) => buildAgentMainSessionKey(agent.id, mainKey))
           .filter((key) => key.trim().length > 0)
       )
     ).slice(0, 64);
