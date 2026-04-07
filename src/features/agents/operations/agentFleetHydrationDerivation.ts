@@ -263,6 +263,8 @@ export const deriveHydrateAgentFleetResult = (
     if (expectsExecOverrides && !hasMatchingExecOverrides) {
       needsSessionSettingsSync.add(agent.id);
     }
+    const resolvedSessionKey =
+      input.mainSessionByAgentId.get(agent.id)?.key ?? buildAgentMainSessionKey(agent.id, mainKey);
     return {
       agentId: agent.id,
       name,
@@ -270,7 +272,7 @@ export const deriveHydrateAgentFleetResult = (
       identityName,
       sessionDisplayName,
       role: typeof agent.role === "string" && agent.role.trim() ? agent.role.trim() : null,
-      sessionKey: buildAgentMainSessionKey(agent.id, mainKey),
+      sessionKey: resolvedSessionKey,
       avatarSeed,
       avatarProfile,
       avatarUrl,
