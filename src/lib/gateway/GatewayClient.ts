@@ -136,6 +136,17 @@ export const resolveGatewayClientName = (
     : OPENCLAW_WEBCHAT_UI_CLIENT_ID;
 };
 
+export const resolveGatewayDisableDeviceAuth = (
+  adapterType: StudioGatewayAdapterType,
+  gatewayUrl: string,
+  token: string
+) => {
+  if (adapterType !== "openclaw") {
+    return true;
+  }
+  return !isLocalGatewayUrl(gatewayUrl) && token.trim().length > 0;
+};
+
 export const resolveInitialGatewayAutoConnectDelayMs = (
   adapterType: StudioGatewayAdapterType
 ): number => {
@@ -953,7 +964,11 @@ export const useGatewayConnection = (
             token,
             authScopeKey: gatewayUrl,
             clientName: resolveGatewayClientName(selectedAdapterType, gatewayUrl),
-            disableDeviceAuth: selectedAdapterType !== "openclaw",
+            disableDeviceAuth: resolveGatewayDisableDeviceAuth(
+              selectedAdapterType,
+              gatewayUrl,
+              token
+            ),
           });
           lastError = null;
           break;
