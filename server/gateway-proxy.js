@@ -131,13 +131,13 @@ function createGatewayProxy(options) {
     };
 
     const forwardConnectFrame = (frame) => {
-      const browserHasAuth =
-        hasNonEmptyToken(frame.params) ||
+      const browserHasToken = hasNonEmptyToken(frame.params);
+      const browserHasAlternativeAuth =
         hasNonEmptyPassword(frame.params) ||
         hasNonEmptyDeviceToken(frame.params) ||
         hasCompleteDeviceAuth(frame.params);
 
-      if (!upstreamToken && !browserHasAuth) {
+      if (!upstreamToken && !browserHasToken && !browserHasAlternativeAuth) {
         sendConnectError(
           "studio.gateway_token_missing",
           "Upstream gateway token is not configured on the Studio host."
@@ -145,12 +145,13 @@ function createGatewayProxy(options) {
         return;
       }
 
-      const connectFrame = browserHasAuth
-        ? frame
-        : {
+      const connectFrame =
+        !browserHasToken && upstreamToken
+          ? {
             ...frame,
             params: injectAuthToken(frame.params, upstreamToken),
-          };
+          }
+          : frame;
       upstreamWs.send(JSON.stringify(connectFrame));
     };
 
