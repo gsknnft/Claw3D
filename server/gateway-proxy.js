@@ -96,6 +96,7 @@ const injectAuthToken = (params, token) => {
   const auth = isObject(next.auth) ? { ...next.auth } : {};
   auth.token = token;
   next.auth = auth;
+  delete next.device;
   return next;
 };
 

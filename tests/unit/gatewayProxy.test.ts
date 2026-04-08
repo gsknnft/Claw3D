@@ -432,7 +432,7 @@ describe("createGatewayProxy", () => {
     }
   });
 
-  it("injects host token while preserving device auth when browser token is missing", async () => {
+  it("strips device auth when injecting host token so upstream sees only shared token", async () => {
     const upstream = new WebSocketServer({ port: 0 });
     const address = upstream.address();
     if (!address || typeof address === "string") {
@@ -441,21 +441,13 @@ describe("createGatewayProxy", () => {
     const upstreamUrl = `ws://127.0.0.1:${address.port}`;
 
     let seenToken: string | null = null;
-    let seenDeviceSignature: string | null = null;
-    let seenDeviceId: string | null = null;
-    let seenDevicePublicKey: string | null = null;
-    let seenDeviceNonce: string | null = null;
-    let seenDeviceSignedAt: number | null = null;
+    let seenDevice: unknown = "NOT_SET";
     upstream.on("connection", (ws) => {
       ws.on("message", (raw) => {
         const parsed = JSON.parse(String(raw));
         if (parsed?.method === "connect") {
           seenToken = parsed?.params?.auth?.token ?? null;
-          seenDeviceSignature = parsed?.params?.device?.signature ?? null;
-          seenDeviceId = parsed?.params?.device?.id ?? null;
-          seenDevicePublicKey = parsed?.params?.device?.publicKey ?? null;
-          seenDeviceNonce = parsed?.params?.device?.nonce ?? null;
-          seenDeviceSignedAt = parsed?.params?.device?.signedAt ?? null;
+          seenDevice = parsed?.params?.device ?? null;
           ws.send(
             JSON.stringify({
               type: "res",
@@ -490,7 +482,7 @@ describe("createGatewayProxy", () => {
       browser.send(
         JSON.stringify({
           type: "req",
-          id: "connect-host-token-with-device",
+          id: "connect-host-token-strips-device",
           method: "connect",
           params: {
             device: {
@@ -508,15 +500,11 @@ describe("createGatewayProxy", () => {
       const response = JSON.parse(String(rawMessage ?? ""));
       expect(response).toMatchObject({
         type: "res",
-        id: "connect-host-token-with-device",
+        id: "connect-host-token-strips-device",
         ok: true,
       });
       expect(seenToken).toBe("host-token-456");
-      expect(seenDeviceSignature).toBe("device-signature-123");
-      expect(seenDeviceId).toBe("device-id-123");
-      expect(seenDevicePublicKey).toBe("device-public-key-123");
-      expect(seenDeviceNonce).toBe("device-nonce-123");
-      expect(typeof seenDeviceSignedAt).toBe("number");
+      expect(seenDevice).toBeNull();
     } finally {
       for (const client of upstream.clients) {
         client.close();
