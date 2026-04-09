@@ -366,9 +366,10 @@ export class StudioSettingsCoordinator {
       if (this.pendingLoadPromise) {
         return this.pendingLoadPromise;
       }
-    } else if (this.pendingLoadPromise) {
-      return this.pendingLoadPromise;
     }
+    // force=true bypasses both cache and any in-flight request so callers
+    // that need authoritative state (e.g. useGatewayConnection on startup)
+    // always get a fresh fetch rather than a possibly-stale pending one.
 
     const loadPromise = this.transport
       .fetchSettings()
