@@ -33,6 +33,7 @@ export type StudioGatewaySettings = {
 
 export type StudioGatewayAdapterType =
   | "openclaw"
+  | "nemoclaw"
   | "hermes"
   | "demo"
   | "local"
@@ -40,6 +41,7 @@ export type StudioGatewayAdapterType =
   | "custom";
 export const STUDIO_GATEWAY_ADAPTER_TYPES = [
   "openclaw",
+  "nemoclaw",
   "hermes",
   "demo",
   "local",
@@ -282,6 +284,7 @@ export type StudioSettingsPatch = {
 
 const SETTINGS_VERSION = 1 as const;
 const DEFAULT_OPENCLAW_GATEWAY_URL = "ws://localhost:18789";
+const DEFAULT_NEMOCLAW_GATEWAY_URL = "ws://localhost:18789";
 const DEFAULT_LOCAL_ADAPTER_GATEWAY_URL = "ws://localhost:18789";
 const DEFAULT_LOCAL_RUNTIME_URL = "http://localhost:7770";
 const DEFAULT_CLAW3D_RUNTIME_URL = "http://localhost:3000/api/runtime/custom";
@@ -813,6 +816,7 @@ const normalizeGatewayProfiles = (
   const profiles: Partial<Record<StudioGatewayAdapterType, StudioGatewayProfile>> = {};
   for (const adapterType of [
     "openclaw",
+    "nemoclaw",
     "hermes",
     "demo",
     "local",
@@ -880,6 +884,7 @@ const mergeGatewayProfiles = (
   };
   for (const adapterType of [
     "openclaw",
+    "nemoclaw",
     "hermes",
     "demo",
     "local",
@@ -939,6 +944,7 @@ const normalizeGatewayAdapterType = (
     adapterType === "demo" ||
     adapterType === "hermes" ||
     adapterType === "openclaw" ||
+    adapterType === "nemoclaw" ||
     adapterType === "local" ||
     adapterType === "claw3d" ||
     adapterType === "custom"
@@ -977,6 +983,8 @@ export const resolveDefaultStudioGatewayProfile = (
     case "hermes":
     case "demo":
       return { url: DEFAULT_LOCAL_ADAPTER_GATEWAY_URL, token: "" };
+    case "nemoclaw":
+      return { url: DEFAULT_NEMOCLAW_GATEWAY_URL, token: "" };
     case "openclaw":
     default:
       return { url: DEFAULT_OPENCLAW_GATEWAY_URL, token: "" };

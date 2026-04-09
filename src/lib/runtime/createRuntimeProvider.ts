@@ -37,6 +37,9 @@ export const createRuntimeProvider = (
       return new DemoRuntimeProvider(client);
     case "hermes":
       return new HermesRuntimeProvider(client);
+    case "nemoclaw":
+      // NemoClaw is OpenClaw-protocol-compatible (NVIDIA security hardened fork).
+      return new OpenClawRuntimeProvider(client);
     case "openclaw":
     default:
       return new OpenClawRuntimeProvider(client);

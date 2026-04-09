@@ -31,6 +31,7 @@ export type RuntimeCapability =
 
 export type RuntimeProviderId =
   | "openclaw"
+  | "nemoclaw"
   | "hermes"
   | "demo"
   | "local"

@@ -1,5 +1,6 @@
 export type FloorProvider =
   | "openclaw"
+  | "nemoclaw"
   | "hermes"
   | "custom"
   | "demo"
@@ -10,6 +11,7 @@ export type FloorZone = "building" | "outside";
 export type FloorId =
   | "lobby"
   | "openclaw-ground"
+  | "nemoclaw-floor"
   | "hermes-first"
   | "local-runtime"
   | "claw3d-runtime"
@@ -54,6 +56,17 @@ export const OFFICE_FLOORS: readonly FloorDefinition[] = [
     enabled: true,
     sortOrder: 10,
     runtimeProfileId: "openclaw-default",
+  },
+  {
+    id: "nemoclaw-floor",
+    label: "NemoClaw Floor",
+    shortLabel: "NemoClaw",
+    provider: "nemoclaw",
+    kind: "runtime",
+    zone: "building",
+    enabled: true,
+    sortOrder: 15,
+    runtimeProfileId: "nemoclaw-default",
   },
   {
     id: "hermes-first",

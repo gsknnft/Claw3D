@@ -125,7 +125,7 @@ const OPENCLAW_CONTROL_UI_CLIENT_ID = "openclaw-control-ui";
 const OPENCLAW_WEBCHAT_UI_CLIENT_ID = "webchat-ui";
 
 const isAutoManagedAdapter = (adapterType: StudioGatewayAdapterType) =>
-  adapterType === "openclaw" || adapterType === "hermes" || adapterType === "demo";
+  adapterType === "openclaw" || adapterType === "nemoclaw" || adapterType === "hermes" || adapterType === "demo";
 
 export const resolveGatewayClientName = (
   adapterType: StudioGatewayAdapterType,
@@ -185,6 +185,7 @@ const normalizeLocalGatewayDefaults = (value: unknown): StudioGatewaySettings | 
     raw.adapterType === "demo" ||
     raw.adapterType === "hermes" ||
     raw.adapterType === "openclaw" ||
+    raw.adapterType === "nemoclaw" ||
     raw.adapterType === "local" ||
     raw.adapterType === "claw3d" ||
     raw.adapterType === "custom"
@@ -210,7 +211,7 @@ const normalizeGatewayProfilesPublic = (
   if (!value || typeof value !== "object") return undefined;
   const raw = value as Partial<Record<StudioGatewayAdapterType, StudioGatewayProfilePublic>>;
   const profiles: Partial<Record<StudioGatewayAdapterType, { url: string; token: string }>> = {};
-  for (const adapterType of ["openclaw", "hermes", "demo", "local", "claw3d", "custom"] as const) {
+  for (const adapterType of ["openclaw", "nemoclaw", "hermes", "demo", "local", "claw3d", "custom"] as const) {
     const profile = normalizeGatewayProfilePublic(raw[adapterType]);
     if (profile) {
       profiles[adapterType] = profile;
@@ -767,6 +768,7 @@ export const useGatewayConnection = (
                   gateway.lastKnownGood.adapterType === "demo" ||
                   gateway.lastKnownGood.adapterType === "hermes" ||
                   gateway.lastKnownGood.adapterType === "openclaw" ||
+                  gateway.lastKnownGood.adapterType === "nemoclaw" ||
                   gateway.lastKnownGood.adapterType === "local" ||
                   gateway.lastKnownGood.adapterType === "claw3d" ||
                   gateway.lastKnownGood.adapterType === "custom"
@@ -785,6 +787,7 @@ export const useGatewayConnection = (
                 gateway.adapterType === "demo" ||
                 gateway.adapterType === "hermes" ||
                 gateway.adapterType === "openclaw" ||
+                gateway.adapterType === "nemoclaw" ||
                 gateway.adapterType === "local" ||
                 gateway.adapterType === "claw3d" ||
                 gateway.adapterType === "custom"
@@ -962,13 +965,20 @@ export const useGatewayConnection = (
         upstreamGatewayUrl: gatewayUrl,
       });
       const hello = client.getLastHello();
-      const nextDetectedAdapterType =
+      const helloAdapterType =
         hello?.adapterType === "demo" ||
         hello?.adapterType === "hermes" ||
         hello?.adapterType === "openclaw" ||
+        hello?.adapterType === "nemoclaw" ||
         hello?.adapterType === "custom"
           ? hello.adapterType
-          : "openclaw";
+          : null;
+      // NemoClaw speaks the OpenClaw protocol so its hello may return "openclaw".
+      // Prefer the user's explicit selection when it's openclaw-compatible.
+      const nextDetectedAdapterType =
+        helloAdapterType === "openclaw" && selectedAdapterType === "nemoclaw"
+          ? "nemoclaw"
+          : helloAdapterType ?? "openclaw";
       setDetectedAdapterType(nextDetectedAdapterType);
       setHasLastKnownGoodState(nextDetectedAdapterType === selectedAdapterType);
       // Flush immediately (debounce=0) so lastKnownGood survives a quick refresh.

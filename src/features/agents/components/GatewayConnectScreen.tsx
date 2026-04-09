@@ -49,6 +49,7 @@ export const GatewayConnectScreen = ({
   const [showToken, setShowToken] = useState(false);
   const tokenOptional =
     selectedAdapterType === "hermes" ||
+    selectedAdapterType === "nemoclaw" ||
     selectedAdapterType === "demo" ||
     selectedAdapterType === "local" ||
     selectedAdapterType === "claw3d" ||
@@ -76,6 +77,9 @@ export const GatewayConnectScreen = ({
   const useOpenClawPreset = () => {
     onAdapterTypeChange("openclaw");
   };
+  const useNemoClawPreset = () => {
+    onAdapterTypeChange("nemoclaw");
+  };
   const useCustomPreset = () => {
     onAdapterTypeChange("custom");
   };
@@ -101,6 +105,8 @@ export const GatewayConnectScreen = ({
     switch (selectedAdapterType) {
       case "openclaw":
         return "OpenClaw is the provider-rich gateway path. Use this when you want upstream model/provider routing managed by OpenClaw itself.";
+      case "nemoclaw":
+        return "NemoClaw is NVIDIA's OpenClaw-compatible runtime with added security hardening via OpenShell. Speaks the OpenClaw protocol — same default port (18789).";
       case "hermes":
         return "Hermes is the agent runtime path with its own provider/account flow behind the gateway.";
       case "demo":
@@ -314,6 +320,13 @@ export const GatewayConnectScreen = ({
             >
               OpenClaw backend
             </button>
+            <button
+              type="button"
+              className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
+              onClick={useNemoClawPreset}
+            >
+              NemoClaw backend
+            </button>
           </div>
         </div>
         {remoteForm}
@@ -335,6 +348,15 @@ export const GatewayConnectScreen = ({
             <p className="mt-1 text-xs leading-snug text-muted-foreground">
               Run <span className="font-mono text-foreground">{localDemoCommand}</span> to start a built-in mock gateway with demo agents.
               Then choose <span className="font-mono text-foreground">Demo backend</span> and connect.
+            </p>
+          </div>
+          <div className="rounded-md border border-border bg-muted/30 px-3 py-3">
+            <p className="text-xs font-medium text-foreground">Using NemoClaw?</p>
+            <p className="mt-1 text-xs leading-snug text-muted-foreground">
+              NemoClaw speaks the OpenClaw protocol. Install via{" "}
+              <span className="font-mono text-foreground">nemoclaw my-assistant connect</span> and
+              point the URL at <span className="font-mono text-foreground">ws://localhost:18789</span>{" "}
+              (or your NemoClaw host). Choose <span className="font-mono text-foreground">NemoClaw backend</span> above.
             </p>
           </div>
           <div className="rounded-md border border-border bg-muted/30 px-3 py-3">

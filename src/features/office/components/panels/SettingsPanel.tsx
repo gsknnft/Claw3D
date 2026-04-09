@@ -87,6 +87,7 @@ export function SettingsPanel({
   const gatewayConnectDisabled = normalizedGatewayUrl.length === 0;
   const tokenOptional =
     selectedAdapterType === "hermes" ||
+    selectedAdapterType === "nemoclaw" ||
     selectedAdapterType === "demo" ||
     selectedAdapterType === "local" ||
     selectedAdapterType === "claw3d" ||
@@ -141,6 +142,7 @@ export function SettingsPanel({
               ["claw3d", "Claw3D"],
               ["custom", "Custom"],
               ["openclaw", "OpenClaw"],
+              ["nemoclaw", "NemoClaw"],
             ] as const
           ).map(([adapterType, label]) => {
             const selected = selectedAdapterType === adapterType;
