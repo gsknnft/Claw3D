@@ -13,6 +13,16 @@ interface Params {
   settingsCoordinator: StudioSettingsCoordinator;
 }
 
+/**
+ * Persists live gateway connection transitions into `officeFloors` settings.
+ *
+ * The key invariant: the patch is always written to the floor that *initiated*
+ * the current gateway connection, not merely whichever floor happens to be
+ * active at the time of the status update.  This prevents cross-floor
+ * misattribution — e.g. switching from the OpenClaw floor to the Hermes floor
+ * while still connected must NOT stamp the Hermes floor as connected to the
+ * OpenClaw gateway URL.
+ */
 export function useOfficeFloorRuntimePersistence({
   activeFloorId,
   gatewayUrl,
@@ -20,11 +30,15 @@ export function useOfficeFloorRuntimePersistence({
   gatewayError,
   settingsCoordinator,
 }: Params): void {
+  // Captures which floor was active the moment this gateway URL was established.
+  // Only refreshes when `gatewayUrl` itself changes, so in-flight status
+  // transitions that arrive after the user has navigated to a different floor
+  // still target the floor that owns the connection.
   const gatewayOwnerFloorIdRef = useRef<FloorId>(activeFloorId);
-
   useEffect(() => {
     gatewayOwnerFloorIdRef.current = activeFloorId;
-  }, [gatewayUrl]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gatewayUrl]); // intentionally excludes activeFloorId
 
   useEffect(() => {
     const key = gatewayUrl.trim();
@@ -40,15 +54,14 @@ export function useOfficeFloorRuntimePersistence({
             lastErrorMessage: null,
           }
         : status === "connecting"
-          ? { status: "connecting" as const, gatewayUrl: key }
+          ? { status: "connecting" as const }
           : gatewayError
             ? {
                 status: "error" as const,
-                gatewayUrl: key,
                 lastErrorCode: "GATEWAY_ERROR",
                 lastErrorMessage: gatewayError,
               }
-            : { status: "disconnected" as const, gatewayUrl: key };
+            : { status: "disconnected" as const };
 
     settingsCoordinator.schedulePatch(
       { officeFloors: { [gatewayOwnerFloorIdRef.current]: patch } },
