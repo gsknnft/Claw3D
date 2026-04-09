@@ -9,6 +9,36 @@ import { resolveStateDir } from "@/lib/clawdbot/paths";
 export const runtime = "nodejs";
 
 const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const CONTENT_TYPE_BY_EXT: Record<string, string> = {
+  ".png": "image/png",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".gif": "image/gif",
+  ".webp": "image/webp",
+  ".txt": "text/plain",
+  ".md": "text/markdown",
+  ".markdown": "text/markdown",
+  ".csv": "text/csv",
+  ".json": "application/json",
+  ".xml": "application/xml",
+  ".pdf": "application/pdf",
+  ".js": "text/plain",
+  ".jsx": "text/plain",
+  ".ts": "text/plain",
+  ".tsx": "text/plain",
+  ".py": "text/plain",
+  ".rb": "text/plain",
+  ".go": "text/plain",
+  ".rs": "text/plain",
+  ".java": "text/plain",
+  ".kt": "text/plain",
+  ".sql": "text/plain",
+  ".html": "text/plain",
+  ".css": "text/plain",
+  ".yaml": "text/plain",
+  ".yml": "text/plain",
+  ".log": "text/plain",
+};
 const ALLOWED_CONTENT_TYPES = new Set([
   "image/png",
   "image/jpeg",
@@ -22,6 +52,7 @@ const ALLOWED_CONTENT_TYPES = new Set([
   "text/xml",
   "application/pdf",
 ]);
+const ALLOWED_EXTENSIONS = new Set(Object.keys(CONTENT_TYPE_BY_EXT));
 
 const TEXT_CONTENT_TYPES = [
   "text/",
@@ -39,6 +70,18 @@ const uploadsDir = () => path.join(resolveStateDir(), "claw3d", "uploads");
 const isTextContentType = (contentType: string): boolean =>
   TEXT_CONTENT_TYPES.some((prefix) => contentType.startsWith(prefix));
 
+const resolveUploadContentType = (file: File): string | null => {
+  const explicit = file.type.trim().toLowerCase();
+  if (explicit && (ALLOWED_CONTENT_TYPES.has(explicit) || explicit.startsWith("text/"))) {
+    return explicit;
+  }
+  const ext = path.extname(file.name || "").trim().toLowerCase();
+  if (!ext || !ALLOWED_EXTENSIONS.has(ext)) {
+    return null;
+  }
+  return CONTENT_TYPE_BY_EXT[ext] ?? null;
+};
+
 export async function POST(request: Request) {
   try {
     const formData = await request.formData();
@@ -53,9 +96,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "File exceeds 10 MB limit." }, { status: 400 });
     }
 
-    const contentType = file.type.trim().toLowerCase();
-    if (!contentType || !ALLOWED_CONTENT_TYPES.has(contentType) && !contentType.startsWith("text/")) {
-      return NextResponse.json({ error: `Unsupported file type: ${contentType || "(unknown)"}` }, { status: 400 });
+    const contentType = resolveUploadContentType(file);
+    if (!contentType) {
+      const ext = path.extname(file.name || "").trim().toLowerCase();
+      return NextResponse.json(
+        { error: `Unsupported file type: ${ext || file.type.trim().toLowerCase() || "(unknown)"}` },
+        { status: 400 }
+      );
     }
 
     const fileId = crypto.randomBytes(8).toString("hex");

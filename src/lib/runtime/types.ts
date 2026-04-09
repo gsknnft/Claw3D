@@ -6,6 +6,13 @@ import type {
   GatewayStatus,
 } from "@/lib/gateway/GatewayClient";
 
+export type RuntimeAttachment = {
+  name: string;
+  url: string;
+  contentType: string;
+  extractedText?: string | null;
+};
+
 export type RuntimeCapability =
   | "agents"
   | "sessions"

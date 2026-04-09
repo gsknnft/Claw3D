@@ -25,6 +25,7 @@ import type {
   ExecApprovalDecision,
   PendingExecApproval,
 } from "@/features/agents/approvals/types";
+import type { RuntimeAttachment } from "@/lib/runtime/types";
 import {
   buildAgentChatRenderBlocks,
   buildFinalAgentChatItems,
@@ -203,7 +204,7 @@ type AgentChatPanelProps = {
   onToolCallingToggle?: (enabled: boolean) => void;
   onThinkingTracesToggle?: (enabled: boolean) => void;
   onDraftChange: (value: string) => void;
-  onSend: (message: string) => void;
+  onSend: (message: string, attachments: RuntimeAttachment[]) => void;
   onRemoveQueuedMessage?: (index: number) => void;
   onStopRun: () => void;
   onAvatarShuffle: () => void;
@@ -1456,16 +1457,15 @@ export const AgentChatPanel = ({
     (message: string) => {
       if (!canSend) return;
       const trimmed = message.trim();
-      const attachmentBlocks = attachments.map(buildUploadedAttachmentPromptBlock);
-      const finalMessage = [trimmed, ...attachmentBlocks].filter(Boolean).join("\n\n").trim();
-      if (!finalMessage) return;
+      if (!trimmed && attachments.length === 0) return;
+      const pendingAttachments = attachments.map(({ id: _id, ...rest }) => rest as RuntimeAttachment);
       plainDraftRef.current = "";
       setDraftValue("");
       setAttachments([]);
       setAttachmentStatus(null);
       onDraftChange("");
       scrollToBottomNextOutputRef.current = true;
-      onSend(finalMessage);
+      onSend(trimmed, pendingAttachments);
     },
     [attachments, canSend, onDraftChange, onSend]
   );

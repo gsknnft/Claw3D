@@ -1102,6 +1102,7 @@ export function OfficeScreen({
   const previousGatewayStatusRef = useRef<"disconnected" | "connecting" | "connected">(
     "disconnected",
   );
+  const didAutoNavigateFromLobbyRef = useRef(false);
   const [floorRosterCache, setFloorRosterCache] = useState(() =>
     createFloorRosterCache(),
   );
@@ -1162,10 +1163,20 @@ export function OfficeScreen({
     };
   }, [settingsCoordinator]);
 
+  // Reset auto-navigate flag when disconnected so the next connection can navigate again.
   useEffect(() => {
-    const previousStatus = previousGatewayStatusRef.current;
-    previousGatewayStatusRef.current = status;
-    if (previousStatus === "connected" || status !== "connected") return;
+    if (status !== "connected" && status !== "connecting") {
+      didAutoNavigateFromLobbyRef.current = false;
+    }
+  }, [status]);
+
+  // Auto-navigate away from lobby when a real adapter connects.
+  // Uses a ref flag instead of previousGatewayStatusRef so the effect can
+  // re-run when detectedAdapterType arrives in a later render (after status
+  // already flipped to "connected").
+  useEffect(() => {
+    if (status !== "connected") return;
+    if (didAutoNavigateFromLobbyRef.current) return;
     if (activeFloor.kind !== "lobby" || activeFloor.provider !== "demo") return;
 
     const connectedProvider =
@@ -1182,7 +1193,9 @@ export function OfficeScreen({
       ) ?? null;
     if (!targetFloor || targetFloor.id === activeFloor.id) return;
 
+    didAutoNavigateFromLobbyRef.current = true;
     setActiveFloorId(targetFloor.id);
+    setSelectedAdapterType(targetFloor.provider as StudioGatewayAdapterType);
     settingsCoordinator.schedulePatch({ activeFloorId: targetFloor.id }, 0);
   }, [
     activeFloor.id,
@@ -1190,6 +1203,7 @@ export function OfficeScreen({
     activeFloor.provider,
     detectedAdapterType,
     selectedAdapterType,
+    setSelectedAdapterType,
     settingsCoordinator,
     status,
   ]);

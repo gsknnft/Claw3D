@@ -971,6 +971,7 @@ export const useGatewayConnection = (
           : "openclaw";
       setDetectedAdapterType(nextDetectedAdapterType);
       setHasLastKnownGoodState(nextDetectedAdapterType === selectedAdapterType);
+      // Flush immediately (debounce=0) so lastKnownGood survives a quick refresh.
       settingsCoordinator.schedulePatch({
         gateway: {
           lastKnownGood: {
@@ -979,7 +980,7 @@ export const useGatewayConnection = (
             adapterType: nextDetectedAdapterType,
           },
         },
-      });
+      }, 0);
       gatewayDebugLog("connect:success", {
         selectedAdapterType,
         detectedAdapterType: nextDetectedAdapterType,
