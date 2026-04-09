@@ -199,7 +199,7 @@ describe("useGatewayConnection", () => {
     expect(captured.clientName).toBe("openclaw-control-ui");
   });
 
-  it("uses_webchat_identity_for_remote_openclaw_connections", async () => {
+  it("uses_control_ui_identity_for_remote_openclaw_connections", async () => {
     const { useGatewayConnection, captured } = await setupAndImportHook(null);
     const coordinator = {
       loadSettings: async () => null,
@@ -242,7 +242,7 @@ describe("useGatewayConnection", () => {
       expect(captured.url).toBe("ws://localhost:3000/api/gateway/ws");
     });
     expect(captured.authScopeKey).toBe("wss://pi5.myth-coho.ts.net");
-    expect(captured.clientName).toBe("webchat-ui");
+    expect(captured.clientName).toBe("openclaw-control-ui");
     expect(captured.disableDeviceAuth).toBe(true);
   });
 
@@ -362,10 +362,10 @@ describe("useGatewayConnection", () => {
     expect(mod.resolveInitialGatewayConnectAttemptCount("openclaw", true)).toBe(1);
   });
 
-  it("uses_webchat_client_id_only_for_remote_openclaw", async () => {
+  it("uses_control_ui_client_id_for_openclaw_connections", async () => {
     const mod = await import("@/lib/gateway/GatewayClient");
     expect(mod.resolveGatewayClientName("openclaw", "wss://pi5.myth-coho.ts.net")).toBe(
-      "webchat-ui"
+      "openclaw-control-ui"
     );
     expect(mod.resolveGatewayClientName("openclaw", "ws://localhost:18789")).toBe(
       "openclaw-control-ui"

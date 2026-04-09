@@ -119,7 +119,6 @@ const DEFAULT_CUSTOM_RUNTIME_URL = "http://localhost:7770";
 const INITIAL_AUTO_CONNECT_DELAY_MS = 900;
 const INITIAL_CONNECT_RETRY_DELAY_MS = 1_200;
 const OPENCLAW_CONTROL_UI_CLIENT_ID = "openclaw-control-ui";
-const OPENCLAW_WEBCHAT_UI_CLIENT_ID = "webchat-ui";
 
 const isAutoManagedAdapter = (adapterType: StudioGatewayAdapterType) =>
   adapterType !== "custom";
@@ -128,12 +127,11 @@ export const resolveGatewayClientName = (
   adapterType: StudioGatewayAdapterType,
   gatewayUrl: string
 ) => {
+  void gatewayUrl;
   if (adapterType !== "openclaw") {
     return OPENCLAW_CONTROL_UI_CLIENT_ID;
   }
-  return isLocalGatewayUrl(gatewayUrl)
-    ? OPENCLAW_CONTROL_UI_CLIENT_ID
-    : OPENCLAW_WEBCHAT_UI_CLIENT_ID;
+  return OPENCLAW_CONTROL_UI_CLIENT_ID;
 };
 
 export const resolveGatewayDisableDeviceAuth = (

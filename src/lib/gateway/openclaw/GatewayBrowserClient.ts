@@ -27,7 +27,14 @@ const GATEWAY_CLIENT_NAMES = {
 
 const GATEWAY_CLIENT_MODES = {
   WEBCHAT: "webchat",
+  UI: "ui",
 } as const;
+
+function resolveDefaultClientMode(clientName?: string): string {
+  return clientName === GATEWAY_CLIENT_NAMES.CONTROL_UI
+    ? GATEWAY_CLIENT_MODES.UI
+    : GATEWAY_CLIENT_MODES.WEBCHAT;
+}
 
 type CryptoLike = {
   randomUUID?: (() => string) | undefined;
@@ -546,7 +553,9 @@ export class GatewayBrowserClient {
       const payload = buildDeviceAuthPayload({
         deviceId: deviceIdentity.deviceId,
         clientId: this.opts.clientName ?? GATEWAY_CLIENT_NAMES.CONTROL_UI,
-        clientMode: this.opts.mode ?? GATEWAY_CLIENT_MODES.WEBCHAT,
+        clientMode:
+          this.opts.mode ??
+          resolveDefaultClientMode(this.opts.clientName ?? GATEWAY_CLIENT_NAMES.CONTROL_UI),
         role,
         scopes,
         signedAtMs,
@@ -569,7 +578,9 @@ export class GatewayBrowserClient {
         id: this.opts.clientName ?? GATEWAY_CLIENT_NAMES.CONTROL_UI,
         version: this.opts.clientVersion ?? "dev",
         platform: this.opts.platform ?? navigator.platform ?? "web",
-        mode: this.opts.mode ?? GATEWAY_CLIENT_MODES.WEBCHAT,
+        mode:
+          this.opts.mode ??
+          resolveDefaultClientMode(this.opts.clientName ?? GATEWAY_CLIENT_NAMES.CONTROL_UI),
         instanceId: this.opts.instanceId,
       },
       role,
