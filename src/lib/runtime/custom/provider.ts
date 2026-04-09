@@ -14,12 +14,18 @@ import {
   normalizeCustomBaseUrl,
   requestCustomRuntime,
 } from "@/lib/runtime/custom/http";
+import {
+  buildAgentHandoffInstruction,
+  buildDirectedAgentMessageInstruction,
+} from "@/lib/runtime/agentMessaging";
 import type { RuntimeCapability, RuntimeEvent, RuntimeProvider } from "@/lib/runtime/types";
 
 const CUSTOM_RUNTIME_CAPABILITIES: ReadonlySet<RuntimeCapability> = new Set([
   "agents",
   "sessions",
   "chat",
+  "agent-messages",
+  "agent-handoffs",
   "models",
   "agent-roles",
 ]);
@@ -264,6 +270,10 @@ export class CustomRuntimeProvider implements RuntimeProvider {
         return (await this.callChatHistory(params)) as T;
       case "chat.send":
         return (await this.callChatSend(params)) as T;
+      case "agents.message":
+        return (await this.callAgentsMessage(params)) as T;
+      case "agents.handoff":
+        return (await this.callAgentsHandoff(params)) as T;
       case "chat.abort":
         return (await this.callChatAbort(params)) as T;
       case "sessions.reset":
@@ -547,6 +557,68 @@ export class CustomRuntimeProvider implements RuntimeProvider {
         }
       }
     }
+  }
+
+  private async callAgentsMessage(rawParams: unknown) {
+    const params = isRecord(rawParams) ? rawParams : {};
+    const targetAgentId =
+      typeof params.targetAgentId === "string" ? params.targetAgentId.trim() : "";
+    const message = typeof params.message === "string" ? params.message.trim() : "";
+    const sourceAgentId =
+      typeof params.sourceAgentId === "string" ? params.sourceAgentId.trim() : "";
+    const sourceLabel =
+      typeof params.sourceLabel === "string" ? params.sourceLabel.trim() : "";
+    const mode =
+      params.mode === "interval" || params.mode === "direct" ? params.mode : "direct";
+    const cadenceHint =
+      typeof params.cadenceHint === "string" ? params.cadenceHint.trim() : "";
+    return this.callChatSend({
+      sessionKey: buildAgentMainSessionKey(targetAgentId, "main"),
+      message: buildDirectedAgentMessageInstruction({
+        targetAgentId,
+        message,
+        sourceAgentId,
+        sourceLabel,
+        mode,
+        cadenceHint,
+      }),
+      idempotencyKey:
+        typeof params.idempotencyKey === "string" ? params.idempotencyKey.trim() : undefined,
+    });
+  }
+
+  private async callAgentsHandoff(rawParams: unknown) {
+    const params = isRecord(rawParams) ? rawParams : {};
+    const targetAgentId =
+      typeof params.targetAgentId === "string" ? params.targetAgentId.trim() : "";
+    const task = typeof params.task === "string" ? params.task.trim() : "";
+    const sourceAgentId =
+      typeof params.sourceAgentId === "string" ? params.sourceAgentId.trim() : "";
+    const sourceLabel =
+      typeof params.sourceLabel === "string" ? params.sourceLabel.trim() : "";
+    const context =
+      typeof params.context === "string" ? params.context.trim() : "";
+    const acceptanceCriteria =
+      typeof params.acceptanceCriteria === "string"
+        ? params.acceptanceCriteria.trim()
+        : "";
+    const deliverables = Array.isArray(params.deliverables)
+      ? params.deliverables.filter((entry): entry is string => typeof entry === "string")
+      : [];
+    return this.callChatSend({
+      sessionKey: buildAgentMainSessionKey(targetAgentId, "main"),
+      message: buildAgentHandoffInstruction({
+        targetAgentId,
+        task,
+        sourceAgentId,
+        sourceLabel,
+        context,
+        acceptanceCriteria,
+        deliverables,
+      }),
+      idempotencyKey:
+        typeof params.idempotencyKey === "string" ? params.idempotencyKey.trim() : undefined,
+    });
   }
 
   private async callChatAbort(rawParams: unknown) {

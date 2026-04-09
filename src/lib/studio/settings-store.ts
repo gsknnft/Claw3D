@@ -71,7 +71,14 @@ const readOpenclawGatewayDefaults = (): StudioGatewaySettings | null => {
 
 const normalizeAdapterType = (value: string | undefined): StudioGatewayAdapterType | null => {
   const normalized = value?.trim().toLowerCase();
-  if (normalized === "openclaw" || normalized === "hermes" || normalized === "demo" || normalized === "custom") {
+  if (
+    normalized === "openclaw" ||
+    normalized === "hermes" ||
+    normalized === "demo" ||
+    normalized === "local" ||
+    normalized === "claw3d" ||
+    normalized === "custom"
+  ) {
     return normalized;
   }
   return null;

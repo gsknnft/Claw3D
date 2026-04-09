@@ -334,6 +334,14 @@ describe("studio settings normalization", () => {
   });
 
   it("resolves adapter-specific defaults for dormant profiles", () => {
+    expect(resolveDefaultStudioGatewayProfile("local", null)).toEqual({
+      url: "http://localhost:7770",
+      token: "",
+    });
+    expect(resolveDefaultStudioGatewayProfile("claw3d", null)).toEqual({
+      url: "http://localhost:3000/api/runtime/custom",
+      token: "",
+    });
     expect(resolveDefaultStudioGatewayProfile("custom", null)).toEqual({
       url: "http://localhost:7770",
       token: "",

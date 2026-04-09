@@ -10,6 +10,8 @@ export type RuntimeCapability =
   | "agents"
   | "sessions"
   | "chat"
+  | "agent-messages"
+  | "agent-handoffs"
   | "streaming"
   | "runtime-agent-events"
   | "approvals"

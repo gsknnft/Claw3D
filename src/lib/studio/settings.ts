@@ -23,8 +23,21 @@ export type StudioGatewaySettings = {
   lastKnownGood?: StudioGatewayConnectionState;
 };
 
-export type StudioGatewayAdapterType = "openclaw" | "hermes" | "demo" | "custom";
-export const STUDIO_GATEWAY_ADAPTER_TYPES = ["openclaw", "hermes", "demo", "custom"] as const;
+export type StudioGatewayAdapterType =
+  | "openclaw"
+  | "hermes"
+  | "demo"
+  | "local"
+  | "claw3d"
+  | "custom";
+export const STUDIO_GATEWAY_ADAPTER_TYPES = [
+  "openclaw",
+  "hermes",
+  "demo",
+  "local",
+  "claw3d",
+  "custom",
+] as const;
 
 export type StudioGatewayProfile = {
   url: string;
@@ -232,6 +245,8 @@ export type StudioSettingsPatch = {
 const SETTINGS_VERSION = 1 as const;
 const DEFAULT_OPENCLAW_GATEWAY_URL = "ws://localhost:18789";
 const DEFAULT_LOCAL_ADAPTER_GATEWAY_URL = "ws://localhost:18789";
+const DEFAULT_LOCAL_RUNTIME_URL = "http://localhost:7770";
+const DEFAULT_CLAW3D_RUNTIME_URL = "http://localhost:3000/api/runtime/custom";
 const DEFAULT_CUSTOM_RUNTIME_URL = "http://localhost:7770";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -834,6 +849,8 @@ const normalizeGatewayAdapterType = (
     adapterType === "demo" ||
     adapterType === "hermes" ||
     adapterType === "openclaw" ||
+    adapterType === "local" ||
+    adapterType === "claw3d" ||
     adapterType === "custom"
   ) {
     return adapterType;
@@ -861,6 +878,10 @@ export const resolveDefaultStudioGatewayProfile = (
   }
 
   switch (adapterType) {
+    case "claw3d":
+      return { url: DEFAULT_CLAW3D_RUNTIME_URL, token: "" };
+    case "local":
+      return { url: DEFAULT_LOCAL_RUNTIME_URL, token: "" };
     case "custom":
       return { url: DEFAULT_CUSTOM_RUNTIME_URL, token: "" };
     case "hermes":

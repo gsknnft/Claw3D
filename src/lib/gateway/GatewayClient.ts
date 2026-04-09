@@ -125,7 +125,7 @@ const OPENCLAW_CONTROL_UI_CLIENT_ID = "openclaw-control-ui";
 const OPENCLAW_WEBCHAT_UI_CLIENT_ID = "webchat-ui";
 
 const isAutoManagedAdapter = (adapterType: StudioGatewayAdapterType) =>
-  adapterType !== "custom";
+  adapterType === "openclaw" || adapterType === "hermes" || adapterType === "demo";
 
 export const resolveGatewayClientName = (
   adapterType: StudioGatewayAdapterType,
@@ -185,6 +185,8 @@ const normalizeLocalGatewayDefaults = (value: unknown): StudioGatewaySettings | 
     raw.adapterType === "demo" ||
     raw.adapterType === "hermes" ||
     raw.adapterType === "openclaw" ||
+    raw.adapterType === "local" ||
+    raw.adapterType === "claw3d" ||
     raw.adapterType === "custom"
       ? raw.adapterType
       : "openclaw";
@@ -208,7 +210,7 @@ const normalizeGatewayProfilesPublic = (
   if (!value || typeof value !== "object") return undefined;
   const raw = value as Partial<Record<StudioGatewayAdapterType, StudioGatewayProfilePublic>>;
   const profiles: Partial<Record<StudioGatewayAdapterType, { url: string; token: string }>> = {};
-  for (const adapterType of ["openclaw", "hermes", "demo", "custom"] as const) {
+  for (const adapterType of ["openclaw", "hermes", "demo", "local", "claw3d", "custom"] as const) {
     const profile = normalizeGatewayProfilePublic(raw[adapterType]);
     if (profile) {
       profiles[adapterType] = profile;
@@ -721,6 +723,12 @@ export const useGatewayConnection = (
         adapterProfiles[value] ?? resolveDefaultStudioGatewayProfile(value, localGatewayDefaults);
       setGatewayUrl(profile.url);
       setToken(profile.token);
+      const loaded = loadedGatewaySettings.current;
+      const nextHasLastKnownGood = Boolean(
+        (loaded?.adapterType === value && loaded.hasLastKnownGood) ||
+          loaded?.profiles?.[value]?.url?.trim()
+      );
+      setHasLastKnownGoodState(nextHasLastKnownGood);
       setError(null);
       setConnectErrorCode(null);
     },
@@ -759,6 +767,8 @@ export const useGatewayConnection = (
                   gateway.lastKnownGood.adapterType === "demo" ||
                   gateway.lastKnownGood.adapterType === "hermes" ||
                   gateway.lastKnownGood.adapterType === "openclaw" ||
+                  gateway.lastKnownGood.adapterType === "local" ||
+                  gateway.lastKnownGood.adapterType === "claw3d" ||
                   gateway.lastKnownGood.adapterType === "custom"
                     ? gateway.lastKnownGood.adapterType
                     : "openclaw",
@@ -767,11 +777,16 @@ export const useGatewayConnection = (
         const gatewaySettings: StudioGatewaySettings | null = gateway
           ? {
               url: typeof gateway.url === "string" ? gateway.url.trim() : "",
-              token: "",
+              token:
+                "token" in gateway && typeof gateway.token === "string"
+                  ? gateway.token
+                  : "",
               adapterType:
                 gateway.adapterType === "demo" ||
                 gateway.adapterType === "hermes" ||
                 gateway.adapterType === "openclaw" ||
+                gateway.adapterType === "local" ||
+                gateway.adapterType === "claw3d" ||
                 gateway.adapterType === "custom"
                   ? gateway.adapterType
                   : "openclaw",
@@ -876,21 +891,29 @@ export const useGatewayConnection = (
     setConnectErrorCode(null);
     retryAttemptRef.current = 0;
     wasManualDisconnectRef.current = false;
-    if (selectedAdapterType === "custom") {
+    if (
+      selectedAdapterType === "custom" ||
+      selectedAdapterType === "local" ||
+      selectedAdapterType === "claw3d"
+    ) {
       setStatus("connecting");
       try {
         await settingsCoordinator.flushPending();
         await probeCustomRuntime(gatewayUrl);
-        setDetectedAdapterType("custom");
+        setDetectedAdapterType(selectedAdapterType);
         setStatus("connected");
         setConnectErrorCode(null);
-        gatewayDebugLog("connect:custom-success", { gatewayUrl });
+        gatewayDebugLog("connect:runtime-success", {
+          selectedAdapterType,
+          gatewayUrl,
+        });
       } catch (err) {
         setStatus("disconnected");
         setDetectedAdapterType(null);
         setConnectErrorCode("studio.custom_runtime_probe_failed");
         setError(formatGatewayError(err));
-        gatewayDebugLog("connect:custom-failed", {
+        gatewayDebugLog("connect:runtime-failed", {
+          selectedAdapterType,
           message: err instanceof Error ? err.message : String(err),
         });
       }
@@ -1133,7 +1156,11 @@ export const useGatewayConnection = (
     setConnectErrorCode(null);
     wasManualDisconnectRef.current = true;
     setDetectedAdapterType(null);
-    if (selectedAdapterType === "custom") {
+    if (
+      selectedAdapterType === "custom" ||
+      selectedAdapterType === "local" ||
+      selectedAdapterType === "claw3d"
+    ) {
       setStatus("disconnected");
       return;
     }
@@ -1153,6 +1180,8 @@ export const useGatewayConnection = (
     settingsLoaded &&
     status !== "connected" &&
     (selectedAdapterType === "custom" ||
+      selectedAdapterType === "local" ||
+      selectedAdapterType === "claw3d" ||
       !hasLastKnownGoodState ||
       !gatewayUrl.trim() ||
       (selectedAdapterType === "openclaw" && !token.trim()) ||
