@@ -4,13 +4,24 @@ export const DOCTOR_STATUSES = {
   fail: "FAIL",
 };
 
-const VALID_ADAPTER_TYPES = new Set(["openclaw", "hermes", "demo", "custom"]);
+const VALID_ADAPTER_TYPES = new Set([
+  "openclaw",
+  "nemoclaw",
+  "hermes",
+  "demo",
+  "local",
+  "claw3d",
+  "custom",
+]);
 const TUNNEL_HOST_PATTERN =
   /(cloudflare|trycloudflare|ngrok|tailscale|ts\.net|tunnel)/i;
 const DEFAULT_GATEWAY_URL_BY_ADAPTER = {
   openclaw: "ws://localhost:18789",
+  nemoclaw: "ws://localhost:18789",
   hermes: "ws://localhost:18789",
   demo: "ws://localhost:18789",
+  local: "http://localhost:7770",
+  claw3d: "http://localhost:3000/api/runtime/custom",
   custom: "http://localhost:7770",
 };
 
