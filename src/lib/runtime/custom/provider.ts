@@ -18,7 +18,12 @@ import {
   buildAgentHandoffInstruction,
   buildDirectedAgentMessageInstruction,
 } from "@/lib/runtime/agentMessaging";
-import type { RuntimeCapability, RuntimeEvent, RuntimeProvider } from "@/lib/runtime/types";
+import type {
+  RuntimeCapability,
+  RuntimeEvent,
+  RuntimeProvider,
+  RuntimeProviderId,
+} from "@/lib/runtime/types";
 
 const CUSTOM_RUNTIME_CAPABILITIES: ReadonlySet<RuntimeCapability> = new Set([
   "agents",
@@ -224,8 +229,8 @@ const buildSyntheticAgents = (
 };
 
 export class CustomRuntimeProvider implements RuntimeProvider {
-  readonly id = "custom" as const;
-  readonly label = "Custom";
+  readonly id: RuntimeProviderId;
+  readonly label: string;
   readonly capabilities = CUSTOM_RUNTIME_CAPABILITIES;
   readonly metadata;
   private readonly baseUrl: string;
@@ -235,14 +240,24 @@ export class CustomRuntimeProvider implements RuntimeProvider {
 
   constructor(
     readonly client: GatewayClient,
-    runtimeUrl: string
+    runtimeUrl: string,
+    options?: {
+      id?: Extract<RuntimeProviderId, "custom" | "local" | "claw3d">;
+      label?: string;
+      runtimeName?: string;
+      vendor?: string | null;
+      routeProfile?: string | null;
+    }
   ) {
+    this.id = options?.id ?? "custom";
+    this.label = options?.label ?? "Custom";
     this.baseUrl = normalizeCustomBaseUrl(runtimeUrl);
     this.metadata = {
       id: this.id,
       label: this.label,
-      runtimeName: "Custom Runtime",
-      routeProfile: null,
+      runtimeName: options?.runtimeName ?? `${this.label} Runtime`,
+      vendor: options?.vendor ?? null,
+      routeProfile: options?.routeProfile ?? this.id,
     };
   }
 

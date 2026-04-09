@@ -13,9 +13,26 @@ export const createRuntimeProvider = (
 ): RuntimeProvider => {
   switch (providerId) {
     case "local":
+      return new CustomRuntimeProvider(client, runtimeUrl, {
+        id: "local",
+        label: "Local Runtime",
+        runtimeName: "Local Runtime",
+        routeProfile: "local",
+      });
     case "claw3d":
+      return new CustomRuntimeProvider(client, runtimeUrl, {
+        id: "claw3d",
+        label: "Claw3D Runtime",
+        runtimeName: "Claw3D Runtime",
+        routeProfile: "claw3d",
+      });
     case "custom":
-      return new CustomRuntimeProvider(client, runtimeUrl);
+      return new CustomRuntimeProvider(client, runtimeUrl, {
+        id: "custom",
+        label: "Custom Runtime",
+        runtimeName: "Custom Runtime",
+        routeProfile: "custom",
+      });
     case "demo":
       return new DemoRuntimeProvider(client);
     case "hermes":
