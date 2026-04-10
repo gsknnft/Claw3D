@@ -25,6 +25,7 @@ const http = require("http");
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
+const { execFileSync } = require("child_process");
 const { WebSocketServer } = require("ws");
 
 function loadDotenvFile(filePath) {
@@ -821,6 +822,45 @@ async function runAgenticLoop({ sessionKey, agentId, userMessage, model, tools, 
 function resOk(id, payload) { return { type: "res", id, ok: true, payload: payload ?? {} }; }
 function resErr(id, code, message) { return { type: "res", id, ok: false, error: { code, message } }; }
 
+function getLiveOpenClawAgents() {
+  try {
+    const raw = execFileSync("openclaw", ["agents", "list", "--json"], {
+      encoding: "utf8",
+      timeout: 15000,
+      env: process.env,
+    });
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return null;
+    return parsed.map((agent) => ({
+      id: agent.id,
+      name: agent.identityName || agent.name || agent.id,
+      workspace: agent.workspace,
+      identity: {
+        name: agent.identityName || agent.name || agent.id,
+        emoji: agent.identityEmoji || "🤖",
+      },
+      role: agent.role,
+      isDefault: Boolean(agent.isDefault),
+    })).filter((agent) => agent.id);
+  } catch (err) {
+    console.warn("[hermes-adapter] Could not load live OpenClaw agents:", sanitizeErrorMessage(err));
+    return null;
+  }
+}
+
+function getClaw3DAgents() {
+  const liveAgents = getLiveOpenClawAgents();
+  if (liveAgents && liveAgents.length > 0) return liveAgents;
+  return [...agentRegistry.values()].map((agent) => ({
+    id: agent.id,
+    name: agent.name,
+    workspace: agent.workspace,
+    identity: { name: agent.name, emoji: "🤖" },
+    role: agent.role,
+    isDefault: agent.id === AGENT_ID,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Method handlers
 // ---------------------------------------------------------------------------
@@ -832,12 +872,13 @@ async function handleMethod(method, params, id, sendEvent) {
     // --- Agent management ---------------------------------------------------
 
     case "agents.list": {
-      const allAgents = [...agentRegistry.values()].map((agent) => ({
-        id: agent.id, name: agent.name, workspace: agent.workspace,
-        identity: { name: agent.name, emoji: "🤖" },
-        role: agent.role,
-      }));
-      return resOk(id, { defaultId: AGENT_ID, mainKey: MAIN_KEY, agents: allAgents });
+      const allAgents = getClaw3DAgents();
+      const defaultAgent = allAgents.find((agent) => agent.isDefault) || allAgents.find((agent) => agent.id === AGENT_ID);
+      return resOk(id, {
+        defaultId: defaultAgent?.id || AGENT_ID,
+        mainKey: MAIN_KEY,
+        agents: allAgents.map(({ isDefault, ...agent }) => agent),
+      });
     }
 
     case "agents.create": {
@@ -1213,7 +1254,7 @@ function startAdapter() {
 
       if (method === "connect") {
         connected = true;
-        const allAgents = [...agentRegistry.values()].map((a) => ({ agentId: a.id, name: a.name, isDefault: a.id === AGENT_ID }));
+        const allAgents = getClaw3DAgents().map((a) => ({ agentId: a.id, name: a.name, isDefault: Boolean(a.isDefault) }));
         send({
           type: "res", id, ok: true,
           payload: {
