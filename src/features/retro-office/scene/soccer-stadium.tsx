@@ -11,6 +11,11 @@ import {
   createDefaultAgentAvatarProfile,
 } from "@/lib/avatars/profile";
 import { useClawFC } from "@/lib/clawfc/context";
+import {
+  deriveMatchDurationMinutes,
+  getReplayMinute,
+  getReplayMinuteFrac,
+} from "@/lib/clawfc/match-timing";
 import type { ClawFCMatchEvent, ClawFCPlayer } from "@/lib/clawfc/types";
 
 const FIELD_WIDTH = 16.6;
@@ -32,11 +37,9 @@ const GOAL_NET_DEPTH = 0.6;
 const PITCH_SURFACE_Y = 0.018;
 const PLAYER_VISUAL_SCALE = (0.66 * AGENT_SCALE) / 0.4495 * 0.72 * 0.9;
 
-// 1 match minute = 1 real minute (90 real minutes for a full match).
-const MATCH_REALTIME_SECONDS = 90 * 60;
-
-function getMatchMinute(elapsed: number): number {
-  return Math.min(90, Math.floor((elapsed % MATCH_REALTIME_SECONDS) / MATCH_REALTIME_SECONDS * 90) + 1);
+function easeInOut(t: number): number {
+  const clamped = Math.max(0, Math.min(1, t));
+  return clamped * clamped * (3 - 2 * clamped);
 }
 
 /**
@@ -552,6 +555,7 @@ function AnimatedPlayerOnPitch({
   allPositions,
   shirtColor,
   shirtNumber,
+  matchDurationMinutes,
 }: {
   homeX: number;
   homeZ: number;
@@ -569,6 +573,7 @@ function AnimatedPlayerOnPitch({
   allPositions?: React.MutableRefObject<{ x: number; z: number }[]>;
   shirtColor?: string;
   shirtNumber?: number;
+  matchDurationMinutes: number;
 }) {
   const groupRef = useRef<Group>(null);
   const setGroupRef = useCallback(
@@ -583,10 +588,10 @@ function AnimatedPlayerOnPitch({
     () => ({
       phaseX: playerIndex * 2.31 + 0.7,
       phaseZ: playerIndex * 1.87 + 1.2,
-      speedX: 0.3 + (playerIndex % 5) * 0.08,
-      speedZ: 0.25 + (playerIndex % 7) * 0.06,
-      rangeX: isGoalkeeper ? 0.3 : 1.2 + (playerIndex % 3) * 0.4,
-      rangeZ: isGoalkeeper ? 0.8 : 0.8 + (playerIndex % 4) * 0.3,
+      speedX: 0.6 + (playerIndex % 5) * 0.12,
+      speedZ: 0.5 + (playerIndex % 7) * 0.1,
+      rangeX: isGoalkeeper ? 0.3 : 1.4 + (playerIndex % 3) * 0.5,
+      rangeZ: isGoalkeeper ? 0.8 : 1.0 + (playerIndex % 4) * 0.4,
     }),
     [playerIndex, isGoalkeeper],
   );
@@ -595,6 +600,19 @@ function AnimatedPlayerOnPitch({
     () => [...events].sort((a, b) => a.minute - b.minute),
     [events],
   );
+
+  const myPassEvents = useMemo(() => {
+    if (!shirtNumber) return [];
+    const myTeam = isHomeTeam ? "home" : "away";
+    return sortedEvents.filter(
+      (e) =>
+        (e.type === "pass_completed" || e.type === "pass_incomplete") &&
+        e.team === myTeam &&
+        (e.jerseyNumber === shirtNumber || e.recipientJersey === shirtNumber) &&
+        e.fromPosition &&
+        e.toPosition,
+    );
+  }, [sortedEvents, shirtNumber, isHomeTeam]);
 
   useFrame(({ clock }) => {
     const g = groupRef.current;
@@ -607,17 +625,36 @@ function AnimatedPlayerOnPitch({
     }
 
     const t = clock.getElapsedTime();
-    const matchMinute = getMatchMinute(t);
+    const matchMinuteFrac = getReplayMinuteFrac(t, matchDurationMinutes);
     const attackDir = isHomeTeam ? 1 : -1;
 
-    // Look back: find most recent event.
-    const pastEvents = sortedEvents.filter((e) => e.minute <= matchMinute);
-    const lastEvent = pastEvents[pastEvents.length - 1];
-    const minutesSinceEvent = lastEvent ? matchMinute - lastEvent.minute : 99;
+    // Look back: find most recent significant event (skip frequent passes).
+    const PASS_TYPES = new Set(["pass_completed", "pass_incomplete", "ball_possession_change"]);
+    let lastEvent: ClawFCMatchEvent | undefined;
+    let lastEventAny: ClawFCMatchEvent | undefined;
+    for (let i = sortedEvents.length - 1; i >= 0; i--) {
+      const e = sortedEvents[i];
+      if (e.minute > matchMinuteFrac) continue;
+      if (!lastEventAny) lastEventAny = e;
+      if (!PASS_TYPES.has(e.type)) {
+        lastEvent = e;
+        break;
+      }
+    }
+    if (!lastEvent) lastEvent = lastEventAny;
+    const minutesSinceEvent = lastEvent ? matchMinuteFrac - lastEvent.minute : 99;
 
-    // Look ahead: find next upcoming event.
-    const nextEvent = sortedEvents.find((e) => e.minute > matchMinute);
-    const minutesUntilNext = nextEvent ? nextEvent.minute - matchMinute : 99;
+    // Look ahead: find next significant event.
+    let nextEvent: ClawFCMatchEvent | undefined;
+    for (let i = 0; i < sortedEvents.length; i++) {
+      const e = sortedEvents[i];
+      if (e.minute <= matchMinuteFrac) continue;
+      if (!PASS_TYPES.has(e.type)) {
+        nextEvent = e;
+        break;
+      }
+    }
+    const minutesUntilNext = nextEvent ? nextEvent.minute - matchMinuteFrac : 99;
 
     let xBias = 0;
     let zBias = 0;
@@ -710,15 +747,21 @@ function AnimatedPlayerOnPitch({
 
     else if (lastEvent && GOAL_TYPES.has(lastEvent.type) && minutesSinceEvent <= 2) {
       const isMyTeamGoal = lastEvent.team === myTeam;
+      const celebIntensity = Math.max(0, 1 - minutesSinceEvent / 2);
       if (isMyTeamGoal) {
-        xBias = attackDir * (isGoalkeeper ? 0.5 : 2.5);
-        zBias = (centerZ - homeZ) * 0.5;
-        driftScale = 0.3;
-        bobScale = 3;
+        const goalX = attackDir * (FIELD_WIDTH / 2 - 2);
+        xBias = isGoalkeeper
+          ? attackDir * 1.5 * celebIntensity
+          : (goalX - (homeX - centerX)) * celebIntensity * 0.6;
+        zBias = (centerZ - homeZ) * celebIntensity * 0.6;
+        driftScale = 0.15;
+        bobScale = 8 * celebIntensity;
+        speedScale = 2;
         celebrating = true;
       } else {
         xBias = -attackDir * 1.0;
         driftScale = 0.5;
+        bobScale = 0.3;
       }
     } else if (lastEvent?.type === "own_goal" && minutesSinceEvent <= 2) {
       const isMyOwnGoal = lastEvent.team === myTeam;
@@ -792,6 +835,36 @@ function AnimatedPlayerOnPitch({
       driftScale = 0.6;
     }
 
+    // --- Pass-awareness: pull player toward their pass position ---
+    let passAttrX = 0;
+    let passAttrZ = 0;
+
+    if (!isGoalkeeper && myPassEvents.length > 0) {
+      let recentPass: ClawFCMatchEvent | null = null;
+      for (let i = myPassEvents.length - 1; i >= 0; i--) {
+        if (myPassEvents[i].minute <= matchMinuteFrac) {
+          recentPass = myPassEvents[i];
+          break;
+        }
+      }
+
+      if (recentPass && matchMinuteFrac - recentPass.minute < 1) {
+        const iAmPasser = recentPass.jerseyNumber === shirtNumber;
+        const pos = iAmPasser
+          ? recentPass.fromPosition
+          : recentPass.toPosition;
+        if (pos) {
+          const field = enginePosToField(pos, centerX, centerZ);
+          if (Number.isFinite(field.x) && Number.isFinite(field.z)) {
+            const freshness = 1 - (matchMinuteFrac - recentPass.minute);
+            passAttrX = (field.x - homeX) * freshness * 0.5;
+            passAttrZ = (field.z - homeZ) * freshness * 0.5;
+            driftScale *= 0.75;
+          }
+        }
+      }
+    }
+
     let dx: number;
     let dz: number;
     if (isGoalkeeper) {
@@ -804,8 +877,8 @@ function AnimatedPlayerOnPitch({
       dz = Math.cos(t * seed.speedZ * speedScale + seed.phaseZ) * seed.rangeZ * driftScale;
     }
 
-    let finalX = homeX + xBias + dx;
-    let finalZ = homeZ + zBias + dz;
+    let finalX = homeX + xBias + passAttrX + dx;
+    let finalZ = homeZ + zBias + passAttrZ + dz;
 
     // Separation: push away from nearby players.
     if (allPositions) {
@@ -829,7 +902,9 @@ function AnimatedPlayerOnPitch({
     g.position.x = finalX;
     g.position.z = finalZ;
 
-    const bob = Math.abs(Math.sin(t * (celebrating ? 8 : 4) + seed.phaseX)) * 0.015 * bobScale;
+    const bobFreq = celebrating ? 12 : 4;
+    const bobAmp = celebrating ? 0.04 : 0.015;
+    const bob = Math.abs(Math.sin(t * bobFreq + seed.phaseX)) * bobAmp * bobScale;
     g.position.y = PITCH_SURFACE_Y + bob;
 
     if (celebrating || isGoalkeeper) {
@@ -876,19 +951,19 @@ function AnimatedBall({
   isLive,
   events,
   allPositions,
+  matchDurationMinutes,
 }: {
   centerX: number;
   centerZ: number;
   isLive: boolean;
   events: ClawFCMatchEvent[];
   allPositions?: React.MutableRefObject<{ x: number; z: number }[]>;
+  matchDurationMinutes: number;
 }) {
   const groupRef = useRef<Group>(null);
   const ballPos = useRef({ x: centerX, z: centerZ });
   const targetPlayer = useRef(0);
   const lastKickTime = useRef(0);
-  const kickVelX = useRef(0);
-  const kickVelZ = useRef(0);
   const inFlight = useRef(false);
 
   const sortedEvents = useMemo(
@@ -896,23 +971,68 @@ function AnimatedBall({
     [events],
   );
 
+  // Build a continuous pass timeline with fractional timestamps.
+  // Passes sharing the same integer minute are evenly spread within that minute.
+  const passTimeline = useMemo(() => {
+    const raw = sortedEvents.filter(
+      (e) =>
+        (e.type === "pass_completed" || e.type === "pass_incomplete") &&
+        e.fromPosition &&
+        e.toPosition,
+    );
+    if (raw.length === 0) return [];
+
+    // Group passes by minute to assign sub-minute fractional times.
+    const timeline: { evt: ClawFCMatchEvent; fracMin: number }[] = [];
+    let i = 0;
+    while (i < raw.length) {
+      const min = raw[i].minute;
+      let j = i;
+      while (j < raw.length && raw[j].minute === min) j++;
+      const count = j - i;
+      for (let k = 0; k < count; k++) {
+        timeline.push({ evt: raw[i + k], fracMin: min + k / count });
+      }
+      i = j;
+    }
+    return timeline;
+  }, [sortedEvents]);
+
   useFrame(({ clock }) => {
     const g = groupRef.current;
     if (!g || !isLive) return;
 
     const t = clock.getElapsedTime();
-    const matchMinute = getMatchMinute(t);
+    const matchMinuteFrac = getReplayMinuteFrac(t, matchDurationMinutes);
     const dt = 1 / 60;
 
-    const pastEvents = sortedEvents.filter((e) => e.minute <= matchMinute);
-    const lastEvent = pastEvents[pastEvents.length - 1];
-    const minutesSince = lastEvent ? matchMinute - lastEvent.minute : 99;
-    const nextEvent = sortedEvents.find((e) => e.minute > matchMinute);
-    const minutesUntilNext = nextEvent ? nextEvent.minute - matchMinute : 99;
+    // Find the most recent significant event (skip frequent passes).
+    const SKIP_TYPES = new Set(["pass_completed", "pass_incomplete", "ball_possession_change"]);
+    let lastEvent: ClawFCMatchEvent | undefined;
+    for (let i = sortedEvents.length - 1; i >= 0; i--) {
+      const e = sortedEvents[i];
+      if (e.minute > matchMinuteFrac) continue;
+      if (!SKIP_TYPES.has(e.type)) {
+        lastEvent = e;
+        break;
+      }
+    }
+    const minutesSince = lastEvent ? matchMinuteFrac - lastEvent.minute : 99;
+
+    let nextEvent: ClawFCMatchEvent | undefined;
+    for (let i = 0; i < sortedEvents.length; i++) {
+      const e = sortedEvents[i];
+      if (e.minute <= matchMinuteFrac) continue;
+      if (!SKIP_TYPES.has(e.type)) {
+        nextEvent = e;
+        break;
+      }
+    }
+    const minutesUntilNext = nextEvent ? nextEvent.minute - matchMinuteFrac : 99;
 
     const GOAL_TYPES = new Set(["goal", "penalty_goal"]);
     const goalSide = (team: string | undefined) =>
-      team === "home" ? FIELD_WIDTH / 2 - 0.5 : -(FIELD_WIDTH / 2 - 0.5);
+      team === "home" ? FIELD_WIDTH / 2 : -(FIELD_WIDTH / 2);
 
     const positions = allPositions?.current;
     let targetX = ballPos.current.x;
@@ -928,13 +1048,20 @@ function AnimatedBall({
     const evtPos = (evt: ClawFCMatchEvent | undefined) =>
       evt?.position ? enginePosToField(evt.position, centerX, centerZ) : null;
 
-    if (lastEvent && GOAL_TYPES.has(lastEvent.type) && minutesSince <= 1) {
-      const p = evtPos(lastEvent);
-      targetX = p ? p.x : centerX + goalSide(lastEvent.team);
-      targetZ = p ? p.z : centerZ + Math.sin(t * 2) * 0.3;
-      speed = 2.5;
-      bounce = 0;
-      spinSpeed = 0.2;
+    if (lastEvent && GOAL_TYPES.has(lastEvent.type) && minutesSince <= 2) {
+      if (minutesSince <= 0.5) {
+        targetX = centerX + goalSide(lastEvent.team);
+        targetZ = centerZ;
+        speed = 4;
+        bounce = 0;
+        spinSpeed = 3;
+      } else {
+        targetX = centerX;
+        targetZ = centerZ;
+        speed = 1;
+        bounce = 0;
+        spinSpeed = 0.3;
+      }
       eventOverride = true;
     } else if (lastEvent?.type === "own_goal" && minutesSince <= 1) {
       const ownGoalX = lastEvent.team === "home" ? -(FIELD_WIDTH / 2 - 0.5) : FIELD_WIDTH / 2 - 0.5;
@@ -1060,64 +1187,146 @@ function AnimatedBall({
       speed = 1 + urgency * 1.5;
     }
 
-    // Use real pass destination when available from engine data.
-    const activePassTarget = (() => {
-      if (!lastEvent) return null;
-      if (minutesSince > 0.3) return null;
-      if (
-        (lastEvent.type === "pass_completed" || lastEvent.type === "pass_incomplete") &&
-        lastEvent.toPosition
-      ) {
-        return enginePosToField(lastEvent.toPosition, centerX, centerZ);
+    // --- Ball movement: always move, never freeze ---
+
+    let moved = false;
+
+    // Priority 1: event overrides (goals, shots, set pieces).
+    if (eventOverride) {
+      const lerpRate = Math.min(1, speed * dt * 2);
+      ballPos.current.x += (targetX - ballPos.current.x) * lerpRate;
+      ballPos.current.z += (targetZ - ballPos.current.z) * lerpRate;
+      moved = true;
+    }
+
+    // Priority 2: pass timeline — follow the actual chronological pass stream.
+    if (!moved && passTimeline.length > 0 && t > 0.5) {
+      let idx = -1;
+      for (let i = passTimeline.length - 1; i >= 0; i--) {
+        if (passTimeline[i].fracMin <= matchMinuteFrac) {
+          idx = i;
+          break;
+        }
       }
-      return null;
-    })();
 
-    // --- Player-to-player passing (default when no event override) ---
+      if (idx < 0) idx = 0;
+      const cur = passTimeline[idx];
+      const next =
+        idx + 1 < passTimeline.length ? passTimeline[idx + 1] : null;
 
-    if (!eventOverride && positions && positions.length > 0 && t > 0.5) {
-      const kickInterval = 4.5 + Math.sin(t * 0.3) * 1.5;
+      if (cur?.evt.fromPosition && cur.evt.toPosition) {
+        const from3d = enginePosToField(cur.evt.fromPosition, centerX, centerZ);
+        const to3d = enginePosToField(cur.evt.toPosition, centerX, centerZ);
 
-      if (t - lastKickTime.current > kickInterval || !inFlight.current) {
+        if (
+          Number.isFinite(from3d.x) && Number.isFinite(from3d.z) &&
+          Number.isFinite(to3d.x) && Number.isFinite(to3d.z)
+        ) {
+          const anchorToNearestPlayer = (target: { x: number; z: number }) => {
+            const playerPoints = positions?.filter(
+              (p) => Number.isFinite(p?.x) && Number.isFinite(p?.z),
+            );
+            if (!playerPoints || playerPoints.length === 0) return target;
+
+            let best = target;
+            let bestDist = Number.POSITIVE_INFINITY;
+            for (const p of playerPoints) {
+              const dx = p.x - target.x;
+              const dz = p.z - target.z;
+              const dist = Math.sqrt(dx * dx + dz * dz);
+              if (dist < bestDist) {
+                best = p;
+                bestDist = dist;
+              }
+            }
+
+            // If the nearest player is clearly related to the pass, anchor to them.
+            return bestDist <= 2.2 ? best : target;
+          };
+
+          const startAnchor = anchorToNearestPlayer(from3d);
+          const endAnchor = anchorToNearestPlayer(to3d);
+          const dirX = endAnchor.x - startAnchor.x;
+          const dirZ = endAnchor.z - startAnchor.z;
+          const dirLen = Math.sqrt(dirX * dirX + dirZ * dirZ) || 1;
+          const unitX = dirX / dirLen;
+          const unitZ = dirZ / dirLen;
+          const footOffset = 0.22;
+          const startPoint = {
+            x: startAnchor.x + unitX * footOffset,
+            z: startAnchor.z + unitZ * footOffset,
+          };
+          const endPoint = {
+            x: endAnchor.x - unitX * footOffset,
+            z: endAnchor.z - unitZ * footOffset,
+          };
+          const rawDuration = next
+            ? Math.max(next.fracMin - cur.fracMin, 0.003)
+            : 0.05;
+          // Keep visual timing very close to the actual pass cadence.
+          const duration = rawDuration;
+          const progress = Math.min(
+            1,
+            Math.max(0, (matchMinuteFrac - cur.fracMin) / duration),
+          );
+          const holdRatio = 0.06;
+          const travelStart = holdRatio;
+          const travelEnd = 1 - holdRatio;
+          const travelProgress =
+            progress <= travelStart
+              ? 0
+              : progress >= travelEnd
+                ? 1
+                : (progress - travelStart) / (travelEnd - travelStart);
+          const eased = easeInOut(travelProgress);
+
+          ballPos.current.x =
+            startPoint.x + (endPoint.x - startPoint.x) * eased;
+          ballPos.current.z =
+            startPoint.z + (endPoint.z - startPoint.z) * eased;
+
+          inFlight.current = progress > travelStart && progress < travelEnd;
+          bounce = inFlight.current
+            ? Math.sin(travelProgress * Math.PI) * 0.02
+            : 0.01;
+          moved = true;
+        }
+      }
+    }
+
+    // Priority 3: bounce between player positions.
+    if (!moved && t > 0.5 && positions && positions.length > 0) {
+      const kickInterval = 3.5 + Math.sin(t * 0.3) * 1.0;
+
+      if (t - lastKickTime.current > kickInterval) {
         const oldTarget = targetPlayer.current;
         let newTarget = Math.floor(Math.abs(Math.sin(t * 3.7 + oldTarget)) * positions.length) % positions.length;
         if (newTarget === oldTarget) newTarget = (newTarget + 1) % positions.length;
         targetPlayer.current = newTarget;
-
-        const dest = activePassTarget;
-        const tp = dest ?? positions[newTarget];
-        const dx = tp.x - ballPos.current.x;
-        const dz = tp.z - ballPos.current.z;
-        const dist = Math.sqrt(dx * dx + dz * dz) || 1;
-        kickVelX.current = (dx / dist) * speed;
-        kickVelZ.current = (dz / dist) * speed;
-        inFlight.current = true;
         lastKickTime.current = t;
       }
 
-      const dest = activePassTarget;
-      const tp = dest ?? positions[targetPlayer.current];
-      if (tp) {
-        const dx = tp.x - ballPos.current.x;
-        const dz = tp.z - ballPos.current.z;
-        const dist = Math.sqrt(dx * dx + dz * dz);
-
-        if (dist < 0.4) {
-          inFlight.current = false;
-          bounce = 0;
-        }
-
-        ballPos.current.x += kickVelX.current * dt;
-        ballPos.current.z += kickVelZ.current * dt;
-
-        kickVelX.current += (dx * 0.25 - kickVelX.current * 0.15) * dt;
-        kickVelZ.current += (dz * 0.25 - kickVelZ.current * 0.15) * dt;
+      const tp = positions[targetPlayer.current];
+      if (tp && Number.isFinite(tp.x) && Number.isFinite(tp.z)) {
+        const lerpRate = Math.min(1, 2.2 * dt);
+        ballPos.current.x += (tp.x - ballPos.current.x) * lerpRate;
+        ballPos.current.z += (tp.z - ballPos.current.z) * lerpRate;
+        moved = true;
       }
-    } else if (eventOverride) {
-      ballPos.current.x += (targetX - ballPos.current.x) * speed * dt * 0.08;
-      ballPos.current.z += (targetZ - ballPos.current.z) * speed * dt * 0.08;
-      inFlight.current = false;
     }
+
+    // Priority 4: last resort — drift around center.
+    if (!moved) {
+      const driftX = centerX + Math.sin(t * 0.8) * 1.5;
+      const driftZ = centerZ + Math.cos(t * 0.6) * 1.0;
+      const lerpRate = Math.min(1, 2 * dt);
+      ballPos.current.x += (driftX - ballPos.current.x) * lerpRate;
+      ballPos.current.z += (driftZ - ballPos.current.z) * lerpRate;
+    }
+
+    // NaN safety net.
+    if (!Number.isFinite(ballPos.current.x)) ballPos.current.x = centerX;
+    if (!Number.isFinite(ballPos.current.z)) ballPos.current.z = centerZ;
 
     // Clamp ball to field bounds.
     const halfW = FIELD_WIDTH / 2 + 0.5;
@@ -1127,7 +1336,7 @@ function AnimatedBall({
 
     g.position.x = ballPos.current.x;
     g.position.z = ballPos.current.z;
-    g.position.y = 0.08 + bounce;
+    g.position.y = 0.11 + bounce;
     g.rotation.x = t * 3 * spinSpeed;
     g.rotation.z = t * 2 * spinSpeed;
   });
@@ -1177,6 +1386,15 @@ export function SoccerMatchDebugCard() {
     () => [...events].sort((a, b) => a.minute - b.minute),
     [events],
   );
+  const matchDurationMinutes = useMemo(
+    () => deriveMatchDurationMinutes(sortedEvents),
+    [sortedEvents],
+  );
+
+  useEffect(() => {
+    startTimeRef.current = null;
+    setMinute(1);
+  }, [matchContext?.match.id, matchDurationMinutes]);
 
   useEffect(() => {
     if (!isLive) return;
@@ -1185,7 +1403,7 @@ export function SoccerMatchDebugCard() {
 
     const id = setInterval(() => {
       const elapsed = (Date.now() - start) / 1000;
-      const m = getMatchMinute(elapsed);
+      const m = getReplayMinute(elapsed, matchDurationMinutes);
       setMinute(m);
 
       const past = sortedEvents.filter((e) => e.minute <= m);
@@ -1245,11 +1463,15 @@ export function SoccerMatchDebugCard() {
       } else if (last?.type === "substitution" && minutesSince <= 1) {
         setPhase("substitution");
       } else {
-        setPhase(m <= 45 ? "open_play (1st)" : "open_play (2nd)");
+        setPhase(
+          m <= Math.ceil(matchDurationMinutes / 2)
+            ? "open_play (1st)"
+            : "open_play (2nd)",
+        );
       }
     }, 500);
     return () => clearInterval(id);
-  }, [isLive, sortedEvents]);
+  }, [isLive, sortedEvents, matchDurationMinutes]);
 
   if (!isLive) return null;
 
@@ -1868,9 +2090,50 @@ export const SoccerStadium = memo(function SoccerStadium({
     matchContext?.awayClub.primary_color ?? DEFAULT_AWAY_COLOR;
   const homeClubName = matchContext?.homeClub.name ?? "Home";
   const awayClubName = matchContext?.awayClub.name ?? "Away";
-  const homeGoals = matchContext?.match.home_goals ?? 0;
-  const awayGoals = matchContext?.match.away_goals ?? 0;
   const matchEvents: ClawFCMatchEvent[] = matchContext?.match.events ?? [];
+  const matchDurationMinutes = useMemo(
+    () => deriveMatchDurationMinutes(matchEvents),
+    [matchEvents],
+  );
+
+  const GOAL_EVENT_TYPES = useMemo(
+    () => new Set(["goal", "penalty_goal"]),
+    [],
+  );
+  const homeClubId = matchContext?.match.home_club_id;
+  const awayClubId = matchContext?.match.away_club_id;
+
+  const [liveMinute, setLiveMinute] = useState(0);
+  const startTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    startTimeRef.current = null;
+    setLiveMinute(0);
+  }, [matchContext?.match.id, matchDurationMinutes]);
+
+  useFrame(() => {
+    if (!isLive) return;
+    if (!startTimeRef.current) startTimeRef.current = performance.now() / 1000;
+    const elapsed = performance.now() / 1000 - startTimeRef.current;
+    const m = getReplayMinute(elapsed, matchDurationMinutes);
+    if (m !== liveMinute) setLiveMinute(m);
+  });
+
+  const { homeGoals, awayGoals } = useMemo(() => {
+    let h = 0;
+    let a = 0;
+    for (const evt of matchEvents) {
+      if (evt.minute > liveMinute) break;
+      if (GOAL_EVENT_TYPES.has(evt.type)) {
+        if (evt.team === "home") h++;
+        else if (evt.team === "away") a++;
+      } else if (evt.type === "own_goal") {
+        if (evt.team === "home") a++;
+        else if (evt.team === "away") h++;
+      }
+    }
+    return { homeGoals: h, awayGoals: a };
+  }, [matchEvents, liveMinute, GOAL_EVENT_TYPES]);
 
   const sortedHomePlayers = useMemo(
     () =>
@@ -2148,7 +2411,8 @@ export const SoccerStadium = memo(function SoccerStadium({
           groupRefCallback={makeGroupRefCallback(index)}
           allPositions={playerPositions}
           shirtColor={homeColor}
-          shirtNumber={index + 1}
+          shirtNumber={sortedHomePlayers?.[index]?.jersey_number ?? index + 1}
+          matchDurationMinutes={matchDurationMinutes}
         />
       ))}
       {/* Away team (east side, facing west). */}
@@ -2172,13 +2436,21 @@ export const SoccerStadium = memo(function SoccerStadium({
             groupRefCallback={makeGroupRefCallback(globalIndex)}
             allPositions={playerPositions}
             shirtColor={awayColor}
-            shirtNumber={index + 1}
+            shirtNumber={sortedAwayPlayers?.[index]?.jersey_number ?? index + 1}
+            matchDurationMinutes={matchDurationMinutes}
           />
         );
       })}
 
       {/* Ball. */}
-      <AnimatedBall centerX={cx} centerZ={cz} isLive={isLive ?? false} events={matchEvents} allPositions={playerPositions} />
+      <AnimatedBall
+        centerX={cx}
+        centerZ={cz}
+        isLive={isLive ?? false}
+        events={matchEvents}
+        allPositions={playerPositions}
+        matchDurationMinutes={matchDurationMinutes}
+      />
 
       {/* Stands (north and south, tinted with club colors). */}
       {[-1, 1].map((dir) => (

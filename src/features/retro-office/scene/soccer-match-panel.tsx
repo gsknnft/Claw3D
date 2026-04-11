@@ -1,8 +1,14 @@
 "use client";
 
-import { memo, useCallback, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useClawFC } from "@/lib/clawfc/context";
+import {
+  deriveMatchDurationMinutes,
+  getReplayMinute,
+} from "@/lib/clawfc/match-timing";
 import type { ClawFCMatchEvent } from "@/lib/clawfc/types";
+
+const GOAL_TYPES = new Set(["goal", "penalty_goal"]);
 
 const eventIcon = (type: ClawFCMatchEvent["type"]): string => {
   switch (type) {
@@ -42,13 +48,61 @@ export function SoccerMatchPanelCard() {
     [selectClub],
   );
 
-  if (!configured) return null;
-
   const match = matchContext?.match;
-  const events = match?.events ?? [];
-  const sortedEvents = [...events].sort(
-    (a, b) => (a.minute ?? 0) - (b.minute ?? 0),
+  const sortedEvents = useMemo(
+    () => [...(match?.events ?? [])].sort((a, b) => (a.minute ?? 0) - (b.minute ?? 0)),
+    [match?.events],
   );
+  const matchDurationMinutes = useMemo(
+    () => deriveMatchDurationMinutes(sortedEvents),
+    [sortedEvents],
+  );
+
+  const isLive =
+    match?.status === "live" ||
+    match?.status === "played" ||
+    match?.status === "finished";
+
+  const [liveMinute, setLiveMinute] = useState(0);
+  const startTimeRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    startTimeRef.current = null;
+    setLiveMinute(0);
+  }, [match?.id, matchDurationMinutes]);
+
+  useEffect(() => {
+    if (!isLive) return;
+    if (!startTimeRef.current) startTimeRef.current = Date.now();
+    const start = startTimeRef.current;
+    const id = setInterval(() => {
+      const elapsed = (Date.now() - start) / 1000;
+      const m = getReplayMinute(elapsed, matchDurationMinutes);
+      setLiveMinute(m);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [isLive, matchDurationMinutes]);
+
+  const liveScore = useMemo(() => {
+    let h = 0;
+    let a = 0;
+    for (const evt of sortedEvents) {
+      if (evt.minute > liveMinute) break;
+      if (GOAL_TYPES.has(evt.type)) {
+        if (evt.team === "home") h++;
+        else if (evt.team === "away") a++;
+      } else if (evt.type === "own_goal") {
+        if (evt.team === "home") a++;
+        else if (evt.team === "away") h++;
+      }
+    }
+    return { home: h, away: a };
+  }, [sortedEvents, liveMinute]);
+
+  const displayHome = isLive ? liveScore.home : (match?.home_goals ?? 0);
+  const displayAway = isLive ? liveScore.away : (match?.away_goals ?? 0);
+
+  if (!configured) return null;
 
   return (
     <div
@@ -192,7 +246,7 @@ export function SoccerMatchPanelCard() {
                 padding: "0 8px",
               }}
             >
-              {match.home_goals} - {match.away_goals}
+              {displayHome} - {displayAway}
             </span>
             <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
               <span style={{ fontWeight: 600, fontSize: 11 }}>
@@ -220,11 +274,11 @@ export function SoccerMatchPanelCard() {
               letterSpacing: 0.8,
             }}
           >
-            {match.status === "live"
-              ? "\uD83D\uDD34 LIVE"
-              : match.status === "played"
-                ? `Played${match.matchweek ? ` \u2022 Week ${match.matchweek}` : ""}`
-                : "Scheduled"}
+            {isLive
+              ? `\uD83D\uDD34 LIVE — ${liveMinute}'`
+              : match.status === "scheduled"
+                ? "Scheduled"
+                : `Played${match.matchweek ? ` \u2022 Week ${match.matchweek}` : ""}`}
           </div>
 
           {/* League table snapshot. */}
@@ -282,68 +336,82 @@ export function SoccerMatchPanelCard() {
             </div>
           ) : null}
 
-          {/* Events timeline. */}
-          {sortedEvents.length > 0 ? (
-            <div
-              style={{
-                maxHeight: 100,
-                overflowY: "auto",
-                borderRadius: 4,
-                background: "rgba(30, 41, 59, 0.5)",
-                padding: 6,
-              }}
-            >
-              {sortedEvents.map((event, index) => (
+          {/* Events timeline (significant events only, up to current minute). */}
+          {(() => {
+            const DISPLAY_TYPES = new Set([
+              "goal", "penalty_goal", "own_goal", "penalty_miss",
+              "yellow_card", "red_card", "substitution",
+            ]);
+            const visibleEvents = sortedEvents.filter(
+              (e) => DISPLAY_TYPES.has(e.type) && (!isLive || e.minute <= liveMinute),
+            );
+            if (visibleEvents.length === 0) {
+              return (
                 <div
-                  key={`event-${index}`}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "2px 0",
-                    borderBottom:
-                      index < sortedEvents.length - 1
-                        ? "1px solid rgba(148, 163, 184, 0.08)"
-                        : "none",
+                    color: "#64748b",
+                    fontSize: 10,
+                    textAlign: "center",
+                    padding: 8,
                   }}
                 >
-                  <span
+                  {isLive && liveMinute < 5
+                    ? `Match underway — ${liveMinute}'`
+                    : "No events recorded."}
+                </div>
+              );
+            }
+            return (
+              <div
+                style={{
+                  maxHeight: 100,
+                  overflowY: "auto",
+                  borderRadius: 4,
+                  background: "rgba(30, 41, 59, 0.5)",
+                  padding: 6,
+                }}
+              >
+                {visibleEvents.map((event, index) => (
+                  <div
+                    key={`event-${index}`}
                     style={{
-                      color: "#94a3b8",
-                      fontSize: 9,
-                      minWidth: 20,
-                      textAlign: "right",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6,
+                      padding: "2px 0",
+                      borderBottom:
+                        index < visibleEvents.length - 1
+                          ? "1px solid rgba(148, 163, 184, 0.08)"
+                          : "none",
                     }}
                   >
-                    {event.minute}&apos;
-                  </span>
-                  <span style={{ fontSize: 11 }}>
-                    {eventIcon(event.type)}
-                  </span>
-                  <span style={{ color: "#e2e8f0", fontSize: 10 }}>
-                    {resolveEventPlayerName(event)}
-                    {event.assist_name ? (
-                      <span style={{ color: "#94a3b8" }}>
-                        {" "}
-                        (ast. {event.assist_name})
-                      </span>
-                    ) : null}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div
-              style={{
-                color: "#64748b",
-                fontSize: 10,
-                textAlign: "center",
-                padding: 8,
-              }}
-            >
-              No events recorded.
-            </div>
-          )}
+                    <span
+                      style={{
+                        color: "#94a3b8",
+                        fontSize: 9,
+                        minWidth: 20,
+                        textAlign: "right",
+                      }}
+                    >
+                      {event.minute}&apos;
+                    </span>
+                    <span style={{ fontSize: 11 }}>
+                      {eventIcon(event.type)}
+                    </span>
+                    <span style={{ color: "#e2e8f0", fontSize: 10 }}>
+                      {resolveEventPlayerName(event)}
+                      {event.assist_name ? (
+                        <span style={{ color: "#94a3b8" }}>
+                          {" "}
+                          (ast. {event.assist_name})
+                        </span>
+                      ) : null}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
 
           {/* Match report preview. */}
           {match.match_report ? (

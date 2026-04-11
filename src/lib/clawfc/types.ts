@@ -17,6 +17,7 @@ export interface ClawFCPlayer {
   technique: number;
   stamina: number;
   is_dummy?: boolean;
+  jersey_number?: number;
 }
 
 export type ClawFCMatchEventType =
@@ -68,6 +69,10 @@ export interface ClawFCMatchEvent {
   shotType?: string;
   /** Possession change reason from engine metadata. */
   possessionChangeReason?: string;
+  /** Jersey number of the player involved. */
+  jerseyNumber?: number;
+  /** For pass/sub events: recipient player's jersey number. */
+  recipientJersey?: number;
 }
 
 /** Raw event row from the match_events database table. */

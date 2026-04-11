@@ -223,15 +223,31 @@ export function normalizeMatchEventRows(
         : undefined;
 
       const meta = row.metadata ?? {};
-      const pos = meta.position as
-        | { x: number; y: number }
-        | undefined;
-      const fromPos = meta.from_position as
-        | { x: number; y: number }
-        | undefined;
-      const toPos = meta.to_position as
-        | { x: number; y: number }
-        | undefined;
+
+      const parsePos = (
+        v: unknown,
+      ): { x: number; y: number } | undefined => {
+        if (!v) return undefined;
+        if (typeof v === "string") {
+          try {
+            return JSON.parse(v);
+          } catch {
+            return undefined;
+          }
+        }
+        if (
+          typeof v === "object" &&
+          typeof (v as Record<string, unknown>).x === "number" &&
+          typeof (v as Record<string, unknown>).y === "number"
+        ) {
+          return v as { x: number; y: number };
+        }
+        return undefined;
+      };
+
+      const pos = parsePos(meta.position);
+      const fromPos = parsePos(meta.from_position);
+      const toPos = parsePos(meta.to_position);
       const recipientId = meta.recipient_id as string | undefined;
       const recipient = recipientId
         ? playerMap.get(recipientId)
@@ -256,6 +272,16 @@ export function normalizeMatchEventRows(
       if (meta.shot_type) evt.shotType = meta.shot_type as string;
       if (meta.reason)
         evt.possessionChangeReason = meta.reason as string;
+      if (typeof meta.jersey_number === "number")
+        evt.jerseyNumber = meta.jersey_number;
+      if (typeof meta.recipient_jersey === "number")
+        evt.recipientJersey = meta.recipient_jersey;
+      if (typeof meta.player_in_jersey === "number")
+        evt.recipientJersey = meta.player_in_jersey;
+
+      // Use player_name from metadata when player_id lookup failed.
+      if (!evt.player && typeof meta.player_name === "string")
+        evt.player = meta.player_name;
 
       return evt;
     });
