@@ -1440,6 +1440,7 @@ export function OfficeScreen({
       const resolved = resolveActiveOfficeFloorId(floorId);
       const floor = getOfficeFloor(resolved);
       const targetRosterState = floorRosterCacheRef.current[resolved];
+      setAgentsLoaded(false);
       setActiveFloorId(resolved);
       settingsCoordinator.schedulePatch({ activeFloorId: resolved }, 0);
       setOfficeCameraCenterSignal((current) => current + 1);
@@ -1454,28 +1455,23 @@ export function OfficeScreen({
             ? await settingsCoordinator.loadSettingsEnvelope({ maxAgeMs: 30_000 })
             : {
                 settings: await settingsCoordinator.loadSettings({ maxAgeMs: 30_000 }),
+                gatewayPrivate: null,
+                localGatewayDefaultsPrivate: null,
               };
         const settings = envelope.settings ?? null;
-        const gateway = settings?.gateway ?? null;
+        const gateway = envelope.gatewayPrivate ?? null;
         const gatewaySettings: StudioGatewaySettings | null = gateway
           ? {
-              url: typeof gateway.url === "string" ? gateway.url.trim() : "",
-              token: selectedAdapterType === gateway.adapterType ? token : "",
-              adapterType:
-                gateway.adapterType === "demo" ||
-                gateway.adapterType === "hermes" ||
-                gateway.adapterType === "openclaw" ||
-                gateway.adapterType === "local" ||
-                gateway.adapterType === "claw3d" ||
-                gateway.adapterType === "custom"
-                  ? gateway.adapterType
-                  : "openclaw",
-              profiles: adapterProfiles,
+              ...gateway,
+              profiles: {
+                ...(gateway.profiles ?? {}),
+                ...adapterProfiles,
+              },
             }
           : null;
         const { profiles } = resolveStudioGatewayProfiles({
           gateway: gatewaySettings,
-          localDefaults: localGatewayDefaults,
+          localDefaults: envelope.localGatewayDefaultsPrivate ?? localGatewayDefaults,
         });
         const floorRuntime = settings?.officeFloors?.[resolved];
         nextGatewayUrl =
@@ -1509,7 +1505,6 @@ export function OfficeScreen({
     },
     [
       adapterProfiles,
-      floorRosterCache,
       focusLocalAgent,
       gatewayUrl,
       localGatewayDefaults,
@@ -1539,6 +1534,9 @@ export function OfficeScreen({
     [focusLocalAgent],
   );
   useEffect(() => {
+    if (!agentsLoaded) {
+      return;
+    }
     if (pendingFloorRuntimeSwitch?.floorId === activeFloor.id) {
       return;
     }
@@ -1553,7 +1551,7 @@ export function OfficeScreen({
         },
       }),
     }));
-  }, [activeFloor.id, pendingFloorRuntimeSwitch, state.agents, state.selectedAgentId]);
+  }, [activeFloor.id, agentsLoaded, pendingFloorRuntimeSwitch, state.agents, state.selectedAgentId]);
 
   const handleDeskAssignmentChange = useCallback(
     (deskUid: string, agentId: string | null) => {

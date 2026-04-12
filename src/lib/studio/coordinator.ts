@@ -3,6 +3,7 @@ import type { AgentAvatarProfile } from "@/lib/avatars/profile";
 import type {
   StudioAnalyticsPreferencePatch,
   StudioFocusedPreference,
+  StudioGatewaySettings,
   StudioGatewaySettingsPublic,
   StudioOfficePreferencePatch,
   StudioSettingsPublic,
@@ -15,6 +16,8 @@ import type {
 export type StudioSettingsResponse = {
   settings: StudioSettingsPublic;
   localGatewayDefaults?: StudioGatewaySettingsPublic | null;
+  gatewayPrivate?: StudioGatewaySettings | null;
+  localGatewayDefaultsPrivate?: StudioGatewaySettings | null;
 };
 
 export type StudioSettingsLoadOptions = {

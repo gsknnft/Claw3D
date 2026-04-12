@@ -24,6 +24,8 @@ export async function GET() {
       {
         settings: sanitizeStudioSettings(settings),
         localGatewayDefaults: sanitizeStudioGatewaySettings(localGatewayDefaults),
+        gatewayPrivate: settings.gateway,
+        localGatewayDefaultsPrivate: localGatewayDefaults,
       },
       { headers: { "Cache-Control": "no-store" } }
     );
@@ -46,7 +48,11 @@ export async function PUT(request: Request) {
     }
     const settings = applyStudioSettingsPatch(body);
     return NextResponse.json(
-      { settings: sanitizeStudioSettings(settings) },
+      {
+        settings: sanitizeStudioSettings(settings),
+        gatewayPrivate: settings.gateway,
+        localGatewayDefaultsPrivate: loadLocalGatewayDefaults(),
+      },
       { headers: { "Cache-Control": "no-store" } }
     );
   } catch (err) {

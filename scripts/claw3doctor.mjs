@@ -248,7 +248,7 @@ const probeCustomRuntimeHealth = async (runtimeUrl) => {
 };
 
 const probeProfileHealth = async ({ adapterType, url }) => {
-  if (adapterType === "custom") {
+  if (isCustomRuntimeAdapter(adapterType)) {
     const result = await probeCustomRuntimeHealth(url);
     return {
       ok: result.ok,

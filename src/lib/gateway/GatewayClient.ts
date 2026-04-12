@@ -746,57 +746,17 @@ export const useGatewayConnection = (
             : {
                 settings: await settingsCoordinator.loadSettings({ force: true }),
                 localGatewayDefaults: null,
+                gatewayPrivate: null,
+                localGatewayDefaultsPrivate: null,
               };
         const settings = envelope.settings ?? null;
-        const gateway = settings?.gateway ?? null;
+        const gateway = envelope.gatewayPrivate ?? null;
         if (cancelled) return;
-        const normalizedDefaults = normalizeLocalGatewayDefaults(envelope.localGatewayDefaults);
+        const normalizedDefaults = normalizeLocalGatewayDefaults(
+          envelope.localGatewayDefaultsPrivate ?? envelope.localGatewayDefaults,
+        );
         setLocalGatewayDefaults(normalizedDefaults);
-        const lastKnownGood =
-          gateway && "lastKnownGood" in gateway && gateway.lastKnownGood
-            ? {
-                url:
-                  typeof gateway.lastKnownGood.url === "string"
-                    ? gateway.lastKnownGood.url
-                    : "",
-                token:
-                  "token" in gateway.lastKnownGood &&
-                  typeof gateway.lastKnownGood.token === "string"
-                    ? gateway.lastKnownGood.token
-                    : "",
-                adapterType:
-                  gateway.lastKnownGood.adapterType === "demo" ||
-                  gateway.lastKnownGood.adapterType === "hermes" ||
-                  gateway.lastKnownGood.adapterType === "openclaw" ||
-                  gateway.lastKnownGood.adapterType === "local" ||
-                  gateway.lastKnownGood.adapterType === "claw3d" ||
-                  gateway.lastKnownGood.adapterType === "custom"
-                    ? gateway.lastKnownGood.adapterType
-                    : "openclaw",
-              }
-            : null;
-        const gatewaySettings: StudioGatewaySettings | null = gateway
-          ? {
-              url: typeof gateway.url === "string" ? gateway.url.trim() : "",
-              token:
-                "token" in gateway && typeof gateway.token === "string"
-                  ? gateway.token
-                  : "",
-              adapterType:
-                gateway.adapterType === "demo" ||
-                gateway.adapterType === "hermes" ||
-                gateway.adapterType === "openclaw" ||
-                gateway.adapterType === "local" ||
-                gateway.adapterType === "claw3d" ||
-                gateway.adapterType === "custom"
-                  ? gateway.adapterType
-                  : "openclaw",
-              ...(gateway?.profiles
-                ? { profiles: normalizeGatewayProfilesPublic(gateway.profiles) }
-                : {}),
-              ...(lastKnownGood ? { lastKnownGood } : {}),
-            }
-          : null;
+        const gatewaySettings: StudioGatewaySettings | null = gateway;
         const resolvedGatewayProfiles = resolveStudioGatewayProfiles({
           gateway: gatewaySettings,
           localDefaults: normalizedDefaults,
