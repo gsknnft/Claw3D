@@ -588,6 +588,7 @@ export type GatewayConnectionState = {
   selectedAdapterType: StudioGatewayAdapterType;
   detectedAdapterType: StudioGatewayAdapterType | null;
   activeAdapterType: StudioGatewayAdapterType;
+  adapterProfiles: Partial<Record<StudioGatewayAdapterType, { url: string; token: string }>>;
   localGatewayDefaults: StudioGatewaySettings | null;
   error: string | null;
   connectPromptReady: boolean;
@@ -1197,6 +1198,7 @@ export const useGatewayConnection = (
     selectedAdapterType,
     detectedAdapterType,
     activeAdapterType,
+    adapterProfiles,
     localGatewayDefaults,
     error,
     connectPromptReady,

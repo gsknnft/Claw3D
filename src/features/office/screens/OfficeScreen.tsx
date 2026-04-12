@@ -968,6 +968,7 @@ export function OfficeScreen({
     selectedAdapterType,
     detectedAdapterType,
     activeAdapterType,
+    adapterProfiles,
     localGatewayDefaults,
     error: gatewayError,
     connect,
@@ -1115,6 +1116,8 @@ export function OfficeScreen({
   const [floorRosterCache, setFloorRosterCache] = useState(() =>
     createFloorRosterCache(),
   );
+  const activeFloorIdRef = useRef<FloorId>("lobby");
+  const floorRosterCacheRef = useRef(floorRosterCache);
   const [gatewayModels, setGatewayModels] = useState<GatewayModelChoice[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
@@ -1153,6 +1156,14 @@ export function OfficeScreen({
     () => getOfficeFloor(resolveActiveOfficeFloorId(activeFloorId)),
     [activeFloorId],
   );
+
+  useEffect(() => {
+    activeFloorIdRef.current = activeFloorId;
+  }, [activeFloorId]);
+
+  useEffect(() => {
+    floorRosterCacheRef.current = floorRosterCache;
+  }, [floorRosterCache]);
 
   useEffect(() => {
     let cancelled = false;
@@ -1401,27 +1412,34 @@ export function OfficeScreen({
     [dispatch, gatewayUrl, settingsCoordinator],
   );
   const focusLocalAgent = useCallback(
-    (agentId: string, options?: { openChat?: boolean }) => {
+    (
+      agentId: string,
+      options?: { openChat?: boolean; persistFloorId?: FloorId; selectStore?: boolean },
+    ) => {
       setSelectedChatAgentId(agentId);
       if (options?.openChat !== false) {
         setChatOpen(true);
       }
-      dispatch({ type: "selectAgent", agentId });
+      if (options?.selectStore !== false) {
+        dispatch({ type: "selectAgent", agentId });
+      }
       setFloorRosterCache((prev) => {
-        const current = prev[activeFloorId];
+        const targetFloorId = options?.persistFloorId ?? activeFloorIdRef.current;
+        const current = prev[targetFloorId];
         if (!current || current.selectedAgentId === agentId) return prev;
         return {
           ...prev,
-          [activeFloorId]: { ...current, selectedAgentId: agentId },
+          [targetFloorId]: { ...current, selectedAgentId: agentId },
         };
       });
     },
-    [activeFloorId, dispatch],
+    [dispatch],
   );
   const handleSelectFloor = useCallback(
     async (floorId: FloorId) => {
       const resolved = resolveActiveOfficeFloorId(floorId);
       const floor = getOfficeFloor(resolved);
+      const targetRosterState = floorRosterCacheRef.current[resolved];
       setActiveFloorId(resolved);
       settingsCoordinator.schedulePatch({ activeFloorId: resolved }, 0);
       setOfficeCameraCenterSignal((current) => current + 1);
@@ -1442,7 +1460,7 @@ export function OfficeScreen({
         const gatewaySettings: StudioGatewaySettings | null = gateway
           ? {
               url: typeof gateway.url === "string" ? gateway.url.trim() : "",
-              token: token,
+              token: selectedAdapterType === gateway.adapterType ? token : "",
               adapterType:
                 gateway.adapterType === "demo" ||
                 gateway.adapterType === "hermes" ||
@@ -1452,25 +1470,7 @@ export function OfficeScreen({
                 gateway.adapterType === "custom"
                   ? gateway.adapterType
                   : "openclaw",
-              ...(gateway.profiles
-                ? {
-                    profiles: Object.fromEntries(
-                      Object.entries(gateway.profiles).flatMap(([profileAdapterType, profile]) =>
-                        profile?.url
-                          ? [
-                              [
-                                profileAdapterType,
-                                {
-                                  url: profile.url.trim(),
-                                  token: "",
-                                },
-                              ],
-                            ]
-                          : [],
-                      ),
-                    ) as StudioGatewaySettings["profiles"],
-                  }
-                : {}),
+              profiles: adapterProfiles,
             }
           : null;
         const { profiles } = resolveStudioGatewayProfiles({
@@ -1496,17 +1496,19 @@ export function OfficeScreen({
       });
 
       const preferredAgentId =
-        floorRosterCache[resolved]?.selectedAgentId ??
-        floorRosterCache[resolved]?.entries[0]?.agentId ??
+        targetRosterState?.selectedAgentId ??
+        targetRosterState?.entries[0]?.agentId ??
         null;
-      if (
-        preferredAgentId &&
-        stateRef.current.agents.some((agent) => agent.agentId === preferredAgentId)
-      ) {
-        focusLocalAgent(preferredAgentId, { openChat: false });
+      if (preferredAgentId) {
+        focusLocalAgent(preferredAgentId, {
+          openChat: false,
+          persistFloorId: resolved,
+          selectStore: false,
+        });
       }
     },
     [
+      adapterProfiles,
       floorRosterCache,
       focusLocalAgent,
       gatewayUrl,
@@ -1537,6 +1539,9 @@ export function OfficeScreen({
     [focusLocalAgent],
   );
   useEffect(() => {
+    if (pendingFloorRuntimeSwitch?.floorId === activeFloor.id) {
+      return;
+    }
     setFloorRosterCache((previous) => ({
       ...previous,
       [activeFloor.id]: buildFloorRosterState({
@@ -1548,7 +1553,7 @@ export function OfficeScreen({
         },
       }),
     }));
-  }, [activeFloor.id, state.agents, state.selectedAgentId]);
+  }, [activeFloor.id, pendingFloorRuntimeSwitch, state.agents, state.selectedAgentId]);
 
   const handleDeskAssignmentChange = useCallback(
     (deskUid: string, agentId: string | null) => {

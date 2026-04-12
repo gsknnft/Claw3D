@@ -6,7 +6,6 @@ export const DOCTOR_STATUSES = {
 
 const VALID_ADAPTER_TYPES = new Set([
   "openclaw",
-  "nemoclaw",
   "hermes",
   "demo",
   "local",
@@ -17,7 +16,6 @@ const TUNNEL_HOST_PATTERN =
   /(cloudflare|trycloudflare|ngrok|tailscale|ts\.net|tunnel)/i;
 const DEFAULT_GATEWAY_URL_BY_ADAPTER = {
   openclaw: "ws://localhost:18789",
-  nemoclaw: "ws://localhost:18789",
   hermes: "ws://localhost:18789",
   demo: "ws://localhost:18789",
   local: "http://localhost:7770",
