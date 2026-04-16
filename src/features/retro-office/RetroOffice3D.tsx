@@ -5239,16 +5239,42 @@ export function RetroOffice3D({
     return () => clearTimeout(timer);
   }, [spotlightAgentId]);
 
+  // Camera constants.
+  const LOCAL_CAMERA_TARGET = useMemo(
+    () => toWorld(LOCAL_OFFICE_CANVAS_WIDTH / 2, LOCAL_OFFICE_CANVAS_HEIGHT / 2 + 150),
+    [],
+  );
+  const CAM_POS = useMemo<[number, number, number]>(() => {
+    if (remoteOfficeEnabled) return DISTRICT_CAMERA_POSITION;
+    return [
+      LOCAL_CAMERA_TARGET[0] + 14,
+      LOCAL_CAMERA_TARGET[1] + 16,
+      LOCAL_CAMERA_TARGET[2] + 17,
+    ];
+  }, [remoteOfficeEnabled, LOCAL_CAMERA_TARGET]);
+  const cameraTarget = remoteOfficeEnabled
+    ? DISTRICT_CAMERA_TARGET
+    : LOCAL_CAMERA_TARGET;
+  const cameraZoom = remoteOfficeEnabled ? DISTRICT_CAMERA_ZOOM : 39;
+  const overviewPreset = useMemo(
+    () => ({ pos: CAM_POS, target: cameraTarget, zoom: cameraZoom }),
+    [CAM_POS, cameraTarget, cameraZoom],
+  );
+  const overviewPresetRef = useRef(overviewPreset);
   const lastOfficeCenterSignalRef = useRef(officeCenterSignal);
 
   useEffect(() => {
-    cameraPresetRef.current = overviewPreset;
+    // eslint-disable-next-line react-hooks/immutability -- overview camera preset is intentionally kept in sync here.
+    overviewPresetRef.current = overviewPreset;
+    cameraPresetRef.current = overviewPresetRef.current;
   }, [overviewPreset]);
 
   useEffect(() => {
     if (officeCenterSignal === lastOfficeCenterSignalRef.current) return;
     lastOfficeCenterSignalRef.current = officeCenterSignal;
-    cameraPresetRef.current = overviewPreset;
+    // eslint-disable-next-line react-hooks/immutability -- overview camera preset is intentionally kept in sync here.
+    overviewPresetRef.current = overviewPreset;
+    cameraPresetRef.current = overviewPresetRef.current;
   }, [officeCenterSignal, overviewPreset]);
 
   return (
