@@ -17,6 +17,7 @@ const PROVIDER_LABEL: Record<FloorDefinition["provider"], string> = {
   demo: "Demo",
   openclaw: "OpenClaw",
   hermes: "Hermes",
+  paperclip: "Paperclip",
   custom: "Custom",
   local: "Local",
   claw3d: "Claw3D",
