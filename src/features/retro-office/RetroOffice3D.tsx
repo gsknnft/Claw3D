@@ -208,6 +208,8 @@ import {
   FloorAndWalls as SceneFloorAndWalls,
   WallPictures as SceneWallPictures,
 } from "@/features/retro-office/scene/environment";
+import { SoccerMatchPanelCard } from "@/features/retro-office/scene/soccer-match-panel";
+import { SoccerMatchDebugCard } from "@/features/retro-office/scene/soccer-stadium";
 import {
   CAMERA_PRESETS as CAMERA_PRESET_MAP,
   CameraAnimator as CameraPresetAnimator,
@@ -6018,6 +6020,8 @@ export function RetroOffice3D({
               </div>
             </button>
           ) : null}
+          <SoccerMatchPanelCard />
+          <SoccerMatchDebugCard />
         </div>
       ) : null}
 
