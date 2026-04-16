@@ -505,7 +505,7 @@ export class GatewayBrowserClient {
       isSecureContext,
     });
 
-    const scopes = ["operator.admin", "operator.approvals", "operator.pairing"];
+    const scopes = ["operator.read", "operator.admin", "operator.approvals", "operator.pairing"];
     const role = "operator";
     const authScopeKey = normalizeAuthScope(this.opts.authScopeKey ?? this.opts.url);
     let deviceIdentity: Awaited<ReturnType<typeof loadOrCreateDeviceIdentity>> | null = null;
