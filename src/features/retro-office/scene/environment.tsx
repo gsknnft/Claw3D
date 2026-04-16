@@ -170,6 +170,7 @@ function OfficeFlagPole({
 import {
   SOCCER_STADIUM_BASE_WIDTH,
   SOCCER_STADIUM_BASE_DEPTH,
+  SOCCER_FIELD_DEPTH,
   SoccerStadium,
 } from "@/features/retro-office/scene/soccer-stadium";
 

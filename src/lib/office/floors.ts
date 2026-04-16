@@ -4,6 +4,7 @@ export type FloorProvider =
   | "custom"
   | "demo"
   | "local"
+  | "paperclip"
   | "claw3d";
 export type FloorZone = "building" | "outside";
 

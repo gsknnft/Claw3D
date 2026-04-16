@@ -2555,3 +2555,5 @@ export const SoccerStadium = memo(function SoccerStadium({
 
 export { STADIUM_BASE_WIDTH as SOCCER_STADIUM_BASE_WIDTH };
 export { STADIUM_BASE_DEPTH as SOCCER_STADIUM_BASE_DEPTH };
+export { FIELD_DEPTH as SOCCER_FIELD_DEPTH };
+export { FIELD_WIDTH as SOCCER_FIELD_WIDTH };

@@ -2705,29 +2705,30 @@ export function RetroOffice3D({
     target: [number, number, number];
     zoom?: number;
   } | null>(null);
+  // Camera constants.
   const LOCAL_CAMERA_TARGET = useMemo(
     () =>
-      toWorld(LOCAL_OFFICE_CANVAS_WIDTH / 2, LOCAL_OFFICE_CANVAS_HEIGHT / 2),
+      toWorld(
+        LOCAL_OFFICE_CANVAS_WIDTH / 2,
+        LOCAL_OFFICE_CANVAS_HEIGHT / 2 + 150,
+      ),
     [],
   );
   const CAM_POS = useMemo<[number, number, number]>(() => {
     if (remoteOfficeEnabled) return DISTRICT_CAMERA_POSITION;
     return [
-      LOCAL_CAMERA_TARGET[0] +
-        (DISTRICT_CAMERA_POSITION[0] - DISTRICT_CAMERA_TARGET[0]),
-      LOCAL_CAMERA_TARGET[1] +
-        (DISTRICT_CAMERA_POSITION[1] - DISTRICT_CAMERA_TARGET[1]),
-      LOCAL_CAMERA_TARGET[2] +
-        (DISTRICT_CAMERA_POSITION[2] - DISTRICT_CAMERA_TARGET[2]),
+      LOCAL_CAMERA_TARGET[0] + 14,
+      LOCAL_CAMERA_TARGET[1] + 16,
+      LOCAL_CAMERA_TARGET[2] + 17,
     ];
-  }, [LOCAL_CAMERA_TARGET, remoteOfficeEnabled]);
+  }, [remoteOfficeEnabled, LOCAL_CAMERA_TARGET]);
   const cameraTarget = remoteOfficeEnabled
     ? DISTRICT_CAMERA_TARGET
     : LOCAL_CAMERA_TARGET;
-  const cameraZoom = remoteOfficeEnabled ? DISTRICT_CAMERA_ZOOM : 56;
+  const cameraZoom = remoteOfficeEnabled ? DISTRICT_CAMERA_ZOOM : 39;
   const overviewPreset = useMemo(
     () => ({ pos: CAM_POS, target: cameraTarget, zoom: cameraZoom }),
-    [CAM_POS, cameraTarget, cameraZoom]
+    [CAM_POS, cameraTarget, cameraZoom],
   );
   const canvasResetKey = useMemo(
     () =>
@@ -3224,17 +3225,21 @@ export function RetroOffice3D({
     () =>
       deskActionUid
         ? (furniture.find(
-            (item) => item._uid === deskActionUid && item.type === "desk_cubicle",
+            (item) =>
+              item._uid === deskActionUid && item.type === "desk_cubicle",
           ) ?? null)
         : null,
     [deskActionUid, furniture],
   );
-  const selectedDeskActionAssignedAgentId =
-    selectedDeskActionItem ? (deskAssignmentByDeskUid[selectedDeskActionItem._uid] ?? "") : "";
+  const selectedDeskActionAssignedAgentId = selectedDeskActionItem
+    ? (deskAssignmentByDeskUid[selectedDeskActionItem._uid] ?? "")
+    : "";
   const selectedDeskActionAssignedAgent = useMemo(
     () =>
       selectedDeskActionAssignedAgentId
-        ? (agents.find((agent) => agent.id === selectedDeskActionAssignedAgentId) ?? null)
+        ? (agents.find(
+            (agent) => agent.id === selectedDeskActionAssignedAgentId,
+          ) ?? null)
         : null,
     [agents, selectedDeskActionAssignedAgentId],
   );
@@ -5241,27 +5246,6 @@ export function RetroOffice3D({
     return () => clearTimeout(timer);
   }, [spotlightAgentId]);
 
-  // Camera constants.
-  const LOCAL_CAMERA_TARGET = useMemo(
-    () => toWorld(LOCAL_OFFICE_CANVAS_WIDTH / 2, LOCAL_OFFICE_CANVAS_HEIGHT / 2 + 150),
-    [],
-  );
-  const CAM_POS = useMemo<[number, number, number]>(() => {
-    if (remoteOfficeEnabled) return DISTRICT_CAMERA_POSITION;
-    return [
-      LOCAL_CAMERA_TARGET[0] + 14,
-      LOCAL_CAMERA_TARGET[1] + 16,
-      LOCAL_CAMERA_TARGET[2] + 17,
-    ];
-  }, [remoteOfficeEnabled, LOCAL_CAMERA_TARGET]);
-  const cameraTarget = remoteOfficeEnabled
-    ? DISTRICT_CAMERA_TARGET
-    : LOCAL_CAMERA_TARGET;
-  const cameraZoom = remoteOfficeEnabled ? DISTRICT_CAMERA_ZOOM : 39;
-  const overviewPreset = useMemo(
-    () => ({ pos: CAM_POS, target: cameraTarget, zoom: cameraZoom }),
-    [CAM_POS, cameraTarget, cameraZoom],
-  );
   const overviewPresetRef = useRef(overviewPreset);
   const lastOfficeCenterSignalRef = useRef(officeCenterSignal);
 
@@ -5836,7 +5820,9 @@ export function RetroOffice3D({
                   key={agent.id}
                   agentId={agent.id}
                   name={agent.name}
-                  subtitle={"subtitle" in agent ? agent.subtitle ?? null : null}
+                  subtitle={
+                    "subtitle" in agent ? (agent.subtitle ?? null) : null
+                  }
                   status={agent.status}
                   color={agentColorMap.get(agent.id) ?? "#888"}
                   appearance={
@@ -5864,8 +5850,8 @@ export function RetroOffice3D({
                       : standupMeeting?.phase === "in_progress"
                         ? (standupSpeechTextByAgentId[agent.id] ?? null)
                         : (speechTextByAgentId[agent.id] ??
-                            streamingTextByAgentId[agent.id] ??
-                            null)
+                          streamingTextByAgentId[agent.id] ??
+                          null)
                   }
                   suppressSpeechBubble={
                     suppressSceneSpeechBubbles &&
@@ -7290,7 +7276,9 @@ export function RetroOffice3D({
                   key={`${ev.id}-${ev.ts}`}
                   className="flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1 text-[10px] font-mono"
                 >
-                  <span className="text-amber-400/80 font-semibold">{ev.name}</span>
+                  <span className="text-amber-400/80 font-semibold">
+                    {ev.name}
+                  </span>
                   <span className="text-amber-600/70">{ev.text}</span>
                 </div>
               ))}
@@ -7315,7 +7303,8 @@ export function RetroOffice3D({
                 const ratio = workingCount / Math.max(agents.length, 1);
                 const label =
                   ratio < 0.2 ? "quiet" : ratio < 0.6 ? "active" : "buzzing";
-                const animDur = ratio < 0.2 ? "1.8s" : ratio < 0.6 ? "1s" : "0.5s";
+                const animDur =
+                  ratio < 0.2 ? "1.8s" : ratio < 0.6 ? "1s" : "0.5s";
                 return (
                   <>
                     <span className="opacity-30">·</span>
