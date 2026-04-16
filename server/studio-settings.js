@@ -61,6 +61,31 @@ const OPENCLAW_CONFIG_FILENAME = "openclaw.json";
 
 const isRecord = (value) => Boolean(value && typeof value === "object");
 
+const normalizeAdapterType = (value) => {
+  const normalized = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (
+    normalized === "openclaw" ||
+    normalized === "hermes" ||
+    normalized === "demo" ||
+    normalized === "custom"
+  ) {
+    return normalized;
+  }
+  return null;
+};
+
+const readEnvGatewayDefaults = (env = process.env) => {
+  const url = typeof env.CLAW3D_GATEWAY_URL === "string" ? env.CLAW3D_GATEWAY_URL.trim() : "";
+  if (!url) return null;
+  const token =
+    typeof env.CLAW3D_GATEWAY_TOKEN === "string" ? env.CLAW3D_GATEWAY_TOKEN.trim() : "";
+  return {
+    url,
+    token,
+    adapterType: normalizeAdapterType(env.CLAW3D_GATEWAY_ADAPTER_TYPE) ?? "openclaw",
+  };
+};
+
 const readOpenclawGatewayDefaults = (env = process.env) => {
   try {
     const stateDir = resolveStateDir(env);
@@ -88,10 +113,16 @@ const loadUpstreamGatewaySettings = (env = process.env) => {
   const gateway = parsed && typeof parsed === "object" ? parsed.gateway : null;
   const url = typeof gateway?.url === "string" ? gateway.url.trim() : "";
   const token = typeof gateway?.token === "string" ? gateway.token.trim() : "";
-  const adapterType =
-    typeof gateway?.adapterType === "string" && gateway.adapterType.trim()
-      ? gateway.adapterType.trim()
-      : "openclaw";
+  const adapterType = normalizeAdapterType(gateway?.adapterType) ?? "openclaw";
+  const envDefaults = readEnvGatewayDefaults(env);
+  if (!url && envDefaults) {
+    return {
+      url: envDefaults.url,
+      token: token || envDefaults.token,
+      adapterType: envDefaults.adapterType,
+      settingsPath,
+    };
+  }
   if (!token && adapterType === "openclaw") {
     const defaults = readOpenclawGatewayDefaults(env);
     if (defaults) {
@@ -102,9 +133,17 @@ const loadUpstreamGatewaySettings = (env = process.env) => {
         settingsPath,
       };
     }
+    if (envDefaults?.adapterType === "openclaw") {
+      return {
+        url: url || envDefaults.url,
+        token: envDefaults.token,
+        adapterType,
+        settingsPath,
+      };
+    }
   }
   return {
-    url: url || DEFAULT_GATEWAY_URL,
+    url: url || envDefaults?.url || DEFAULT_GATEWAY_URL,
     token,
     adapterType,
     settingsPath,

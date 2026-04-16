@@ -1,6 +1,3 @@
-import type { NextConfig } from "next";
-import path from "node:path";
-
 const securityHeaders = [
   {
     key: "Content-Security-Policy",
@@ -49,10 +46,8 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
-const nextConfig: NextConfig = {
-  turbopack: {
-    root: path.resolve(__dirname),
-  },
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   async headers() {
     return [
       {

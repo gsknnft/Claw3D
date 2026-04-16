@@ -9,7 +9,8 @@ export type { OnboardingWizardProps } from "@/features/onboarding/components/Onb
 export { useOnboardingState } from "@/features/onboarding/useOnboardingState";
 export type { OnboardingStateReturn } from "@/features/onboarding/useOnboardingState";
 export {
-  ONBOARDING_STEPS,
+  LOCAL_ONBOARDING_STEPS,
+  MANAGED_ONBOARDING_STEPS,
   type OnboardingStepId,
   type OnboardingStep,
 } from "@/features/onboarding/types";

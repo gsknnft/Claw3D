@@ -122,7 +122,6 @@ const DEFAULT_UPSTREAM_GATEWAY_URL =
 const INITIAL_AUTO_CONNECT_DELAY_MS = 900;
 const INITIAL_CONNECT_RETRY_DELAY_MS = 1_200;
 const OPENCLAW_CONTROL_UI_CLIENT_ID = "openclaw-control-ui";
-const OPENCLAW_WEBCHAT_UI_CLIENT_ID = "webchat-ui";
 
 const isAutoManagedAdapter = (adapterType: StudioGatewayAdapterType) =>
   adapterType === "openclaw" || adapterType === "hermes" || adapterType === "demo";
@@ -131,12 +130,22 @@ export const resolveGatewayClientName = (
   adapterType: StudioGatewayAdapterType,
   gatewayUrl: string
 ) => {
+  void gatewayUrl;
   if (adapterType !== "openclaw") {
     return OPENCLAW_CONTROL_UI_CLIENT_ID;
   }
-  return isLocalGatewayUrl(gatewayUrl)
-    ? OPENCLAW_CONTROL_UI_CLIENT_ID
-    : OPENCLAW_WEBCHAT_UI_CLIENT_ID;
+  return OPENCLAW_CONTROL_UI_CLIENT_ID;
+};
+
+export const resolveGatewayDisableDeviceAuth = (
+  adapterType: StudioGatewayAdapterType,
+  gatewayUrl: string,
+  token: string
+) => {
+  if (adapterType !== "openclaw") {
+    return true;
+  }
+  return !isLocalGatewayUrl(gatewayUrl) && token.trim().length > 0;
 };
 
 export const resolveInitialGatewayAutoConnectDelayMs = (
@@ -894,7 +903,11 @@ export const useGatewayConnection = (
             token,
             authScopeKey: gatewayUrl,
             clientName: resolveGatewayClientName(selectedAdapterType, gatewayUrl),
-            disableDeviceAuth: selectedAdapterType !== "openclaw",
+            disableDeviceAuth: resolveGatewayDisableDeviceAuth(
+              selectedAdapterType,
+              gatewayUrl,
+              token
+            ),
           });
           lastError = null;
           break;

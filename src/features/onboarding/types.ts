@@ -10,6 +10,7 @@ export type OnboardingStepId =
   | "welcome"
   | "prerequisites"
   | "connect"
+  | "byok"
   | "agents"
   | "company"
   | "complete";
@@ -33,7 +34,7 @@ export type OnboardingState = {
   agentCount: number;
 };
 
-export const ONBOARDING_STEPS: OnboardingStep[] = [
+export const LOCAL_ONBOARDING_STEPS: OnboardingStep[] = [
   {
     id: "welcome",
     title: "Welcome to Claw3D",
@@ -72,21 +73,35 @@ export const ONBOARDING_STEPS: OnboardingStep[] = [
   },
 ];
 
-export const getStepIndex = (stepId: OnboardingStepId): number =>
-  ONBOARDING_STEPS.findIndex((s) => s.id === stepId);
-
-export const getNextStep = (
-  currentId: OnboardingStepId,
-): OnboardingStepId | null => {
-  const idx = getStepIndex(currentId);
-  if (idx < 0 || idx >= ONBOARDING_STEPS.length - 1) return null;
-  return ONBOARDING_STEPS[idx + 1].id;
-};
-
-export const getPrevStep = (
-  currentId: OnboardingStepId,
-): OnboardingStepId | null => {
-  const idx = getStepIndex(currentId);
-  if (idx <= 0) return null;
-  return ONBOARDING_STEPS[idx - 1].id;
-};
+export const MANAGED_ONBOARDING_STEPS: OnboardingStep[] = [
+  {
+    id: "welcome",
+    title: "Welcome to Claw3D",
+    description: "Your AI office in 3D",
+    skippable: false,
+  },
+  {
+    id: "prerequisites",
+    title: "Before You Start",
+    description: "What you'll need",
+    skippable: true,
+  },
+  {
+    id: "byok",
+    title: "Add Your Provider Key",
+    description: "Configure model access for this managed workspace",
+    skippable: false,
+  },
+  {
+    id: "company",
+    title: "Build Your Company",
+    description: "Generate your org structure",
+    skippable: true,
+  },
+  {
+    id: "complete",
+    title: "You're All Set",
+    description: "Start exploring",
+    skippable: false,
+  },
+];

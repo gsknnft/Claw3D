@@ -20,11 +20,13 @@ const setupAndImportHook = async (gatewayUrl: string | null) => {
     token: unknown;
     authScopeKey: unknown;
     clientName: unknown;
+    disableDeviceAuth: unknown;
   } = {
     url: null,
     token: null,
     authScopeKey: null,
     clientName: null,
+    disableDeviceAuth: null,
   };
 
   vi.doMock("../../src/lib/gateway/openclaw/GatewayBrowserClient", () => {
@@ -42,6 +44,7 @@ const setupAndImportHook = async (gatewayUrl: string | null) => {
         captured.token = "token" in opts ? opts.token : null;
         captured.authScopeKey = "authScopeKey" in opts ? opts.authScopeKey : null;
         captured.clientName = "clientName" in opts ? opts.clientName : null;
+        captured.disableDeviceAuth = "disableDeviceAuth" in opts ? opts.disableDeviceAuth : null;
         this.opts = {
           onHello: typeof opts.onHello === "function" ? (opts.onHello as (hello: unknown) => void) : undefined,
           onEvent: typeof opts.onEvent === "function" ? (opts.onEvent as (event: unknown) => void) : undefined,
@@ -196,7 +199,7 @@ describe("useGatewayConnection", () => {
     expect(captured.clientName).toBe("openclaw-control-ui");
   });
 
-  it("uses_webchat_identity_for_remote_openclaw_connections", async () => {
+  it("uses_control_ui_identity_for_remote_openclaw_connections", async () => {
     const { useGatewayConnection, captured } = await setupAndImportHook(null);
     const coordinator = {
       loadSettings: async () => null,
@@ -239,7 +242,8 @@ describe("useGatewayConnection", () => {
       expect(captured.url).toBe("ws://localhost:3000/api/gateway/ws");
     });
     expect(captured.authScopeKey).toBe("wss://pi5.myth-coho.ts.net");
-    expect(captured.clientName).toBe("webchat-ui");
+    expect(captured.clientName).toBe("openclaw-control-ui");
+    expect(captured.disableDeviceAuth).toBe(true);
   });
 
   it("keeps_control_ui_identity_for_local_openclaw_connections", async () => {
@@ -286,6 +290,7 @@ describe("useGatewayConnection", () => {
     });
     expect(captured.authScopeKey).toBe("ws://localhost:18789");
     expect(captured.clientName).toBe("openclaw-control-ui");
+    expect(captured.disableDeviceAuth).toBe(false);
   });
 
   it("does_not_auto_connect_without_a_last_known_good_state", async () => {
@@ -357,10 +362,10 @@ describe("useGatewayConnection", () => {
     expect(mod.resolveInitialGatewayConnectAttemptCount("openclaw", true)).toBe(1);
   });
 
-  it("uses_webchat_client_id_only_for_remote_openclaw", async () => {
+  it("uses_control_ui_client_id_for_openclaw_connections", async () => {
     const mod = await import("@/lib/gateway/GatewayClient");
     expect(mod.resolveGatewayClientName("openclaw", "wss://pi5.myth-coho.ts.net")).toBe(
-      "webchat-ui"
+      "openclaw-control-ui"
     );
     expect(mod.resolveGatewayClientName("openclaw", "ws://localhost:18789")).toBe(
       "openclaw-control-ui"

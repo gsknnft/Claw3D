@@ -63,11 +63,15 @@ const isPublicHost = (host) => {
   return true;
 };
 
-const assertPublicHostAllowed = ({ host, studioAccessToken }) => {
+const allowPublicHostWithoutStudioToken = (env = process.env) =>
+  /^(1|true)$/i.test(String(env.ALLOW_PUBLIC_HOST_WITHOUT_STUDIO_TOKEN ?? "").trim());
+
+const assertPublicHostAllowed = ({ host, studioAccessToken, env = process.env }) => {
   if (!isPublicHost(host)) return;
 
   const token = String(studioAccessToken ?? "").trim();
   if (token) return;
+  if (allowPublicHostWithoutStudioToken(env)) return;
 
   const normalized = normalizeHost(host) || String(host ?? "").trim() || "(unknown)";
   throw new Error(
@@ -77,6 +81,7 @@ const assertPublicHostAllowed = ({ host, studioAccessToken }) => {
 };
 
 module.exports = {
+  allowPublicHostWithoutStudioToken,
   resolveHosts,
   resolveHost,
   isPublicHost,

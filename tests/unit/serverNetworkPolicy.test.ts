@@ -58,4 +58,17 @@ describe("server network policy", () => {
       assertPublicHostAllowed({ host: "0.0.0.0", studioAccessToken: "abc" })
     ).not.toThrow();
   });
+
+  it("allows public bind when explicitly opted in for managed deployments", async () => {
+    const { assertPublicHostAllowed } = await import("../../server/network-policy");
+    expect(() =>
+      assertPublicHostAllowed({
+        host: "0.0.0.0",
+        studioAccessToken: "",
+        env: {
+          ALLOW_PUBLIC_HOST_WITHOUT_STUDIO_TOKEN: "true",
+        } as unknown as NodeJS.ProcessEnv,
+      })
+    ).not.toThrow();
+  });
 });

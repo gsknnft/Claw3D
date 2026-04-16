@@ -8,10 +8,16 @@ const makeTempDir = (name: string) => fs.mkdtempSync(path.join(os.tmpdir(), `${n
 
 describe("server studio upstream gateway settings", () => {
   const priorStateDir = process.env.OPENCLAW_STATE_DIR;
+  const priorGatewayUrl = process.env.CLAW3D_GATEWAY_URL;
+  const priorGatewayToken = process.env.CLAW3D_GATEWAY_TOKEN;
+  const priorGatewayAdapterType = process.env.CLAW3D_GATEWAY_ADAPTER_TYPE;
   let tempDir: string | null = null;
 
   afterEach(() => {
     process.env.OPENCLAW_STATE_DIR = priorStateDir;
+    process.env.CLAW3D_GATEWAY_URL = priorGatewayUrl;
+    process.env.CLAW3D_GATEWAY_TOKEN = priorGatewayToken;
+    process.env.CLAW3D_GATEWAY_ADAPTER_TYPE = priorGatewayAdapterType;
     if (tempDir) {
       fs.rmSync(tempDir, { recursive: true, force: true });
       tempDir = null;
@@ -54,5 +60,20 @@ describe("server studio upstream gateway settings", () => {
     const settings = loadUpstreamGatewaySettings(process.env);
     expect(settings.url).toBe("ws://gateway.example:18789");
     expect(settings.token).toBe("tok-local");
+  });
+
+  it("falls back to CLAW3D_GATEWAY env vars when no saved settings exist", async () => {
+    tempDir = makeTempDir("studio-upstream-env-defaults");
+    process.env.OPENCLAW_STATE_DIR = tempDir;
+    process.env.CLAW3D_GATEWAY_URL = "ws://gateway.internal:3000";
+    process.env.CLAW3D_GATEWAY_TOKEN = "env-token";
+    process.env.CLAW3D_GATEWAY_ADAPTER_TYPE = "openclaw";
+
+    const { loadUpstreamGatewaySettings } = await import("../../server/studio-settings");
+    const settings = loadUpstreamGatewaySettings(process.env);
+
+    expect(settings.url).toBe("ws://gateway.internal:3000");
+    expect(settings.token).toBe("env-token");
+    expect(settings.adapterType).toBe("openclaw");
   });
 });
