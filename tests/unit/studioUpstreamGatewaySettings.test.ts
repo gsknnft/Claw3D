@@ -76,4 +76,31 @@ describe("server studio upstream gateway settings", () => {
     expect(settings.token).toBe("env-token");
     expect(settings.adapterType).toBe("openclaw");
   });
+
+  it("loads paperclip adapter type from studio settings", async () => {
+    tempDir = makeTempDir("studio-upstream-paperclip-adapter-type");
+    process.env.OPENCLAW_STATE_DIR = tempDir;
+
+    fs.mkdirSync(path.join(tempDir, "claw3d"), { recursive: true });
+    fs.writeFileSync(
+      path.join(tempDir, "claw3d", "settings.json"),
+      JSON.stringify(
+        {
+          gateway: {
+            url: "ws://localhost:18791",
+            token: "",
+            adapterType: "paperclip",
+          },
+        },
+        null,
+        2
+      ),
+      "utf8"
+    );
+
+    const { loadUpstreamGatewaySettings } = await import("../../server/studio-settings");
+    const settings = loadUpstreamGatewaySettings(process.env);
+    expect(settings.url).toBe("ws://localhost:18791");
+    expect(settings.adapterType).toBe("paperclip");
+  });
 });

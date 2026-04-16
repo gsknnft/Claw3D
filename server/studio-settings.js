@@ -67,6 +67,7 @@ const normalizeAdapterType = (value) => {
     normalized === "openclaw" ||
     normalized === "hermes" ||
     normalized === "demo" ||
+    normalized === "paperclip" ||
     normalized === "custom"
   ) {
     return normalized;

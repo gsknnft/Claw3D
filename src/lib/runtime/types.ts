@@ -35,6 +35,7 @@ export type RuntimeProviderId =
   | "demo"
   | "local"
   | "claw3d"
+  | "paperclip"
   | "custom";
 
 export type RuntimeProviderMetadata = {

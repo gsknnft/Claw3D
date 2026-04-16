@@ -37,6 +37,7 @@ export type StudioGatewayAdapterType =
   | "demo"
   | "local"
   | "claw3d"
+  | "paperclip"
   | "custom";
 export const STUDIO_GATEWAY_ADAPTER_TYPES = [
   "openclaw",
@@ -44,6 +45,7 @@ export const STUDIO_GATEWAY_ADAPTER_TYPES = [
   "demo",
   "local",
   "claw3d",
+  "paperclip",
   "custom",
 ] as const;
 
@@ -817,6 +819,7 @@ const normalizeGatewayProfiles = (
     "demo",
     "local",
     "claw3d",
+    "paperclip",
     "custom",
   ] as const) {
     const normalized = normalizeGatewayProfile(value[adapterType]);
@@ -884,6 +887,7 @@ const mergeGatewayProfiles = (
     "demo",
     "local",
     "claw3d",
+    "paperclip",
     "custom",
   ] as const) {
     const profilePatch = patch[adapterType];
@@ -938,6 +942,7 @@ const normalizeGatewayAdapterType = (
   if (
     adapterType === "demo" ||
     adapterType === "hermes" ||
+    adapterType === "paperclip" ||
     adapterType === "openclaw" ||
     adapterType === "local" ||
     adapterType === "claw3d" ||
