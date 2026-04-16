@@ -1,9 +1,10 @@
 import {
   OFFICE_FLOORS,
   getAdjacentEnabledOfficeFloorId,
-  listOfficeFloorsForZone,
+  listAvailableFloorsForAdapter,
   type FloorDefinition,
   type FloorId,
+  type FloorProvider,
 } from "@/lib/office/floors";
 import type { FloorRosterState } from "@/lib/office/floorRoster";
 
@@ -11,12 +12,15 @@ type OfficeFloorNavProps = {
   activeFloorId: FloorId;
   floorRosterCache: Record<FloorId, FloorRosterState>;
   onSelectFloor: (floorId: FloorId) => void;
+  /** The currently selected adapter — controls which runtime floors are shown */
+  activeAdapterType?: FloorProvider | null;
 };
 
-const PROVIDER_LABEL: Record<FloorDefinition["provider"], string> = {
+const PROVIDER_LABEL: Record<FloorProvider, string> = {
   demo: "Demo",
   openclaw: "OpenClaw",
   hermes: "Hermes",
+  paperclip: "Paperclip",
   custom: "Custom",
   local: "Local",
   claw3d: "Claw3D",
@@ -86,10 +90,18 @@ export function OfficeFloorNav({
   activeFloorId,
   floorRosterCache,
   onSelectFloor,
+  activeAdapterType,
 }: OfficeFloorNavProps) {
-  const buildingFloors = listOfficeFloorsForZone("building");
-  const outsideFloors = listOfficeFloorsForZone("outside");
-  const activeFloor = OFFICE_FLOORS.find((floor) => floor.id === activeFloorId) ?? OFFICE_FLOORS[0];
+  const availableFloors = listAvailableFloorsForAdapter(activeAdapterType ?? null);
+  const buildingFloors = availableFloors.filter((f) => f.zone === "building");
+  const outsideFloors = availableFloors.filter((f) => f.zone === "outside");
+
+  // Active floor — fall back to lobby if current floor is no longer available
+  const activeIsAvailable = availableFloors.some((f) => f.id === activeFloorId);
+  const displayActiveFloorId = activeIsAvailable ? activeFloorId : "lobby";
+
+  const activeFloor =
+    OFFICE_FLOORS.find((floor) => floor.id === displayActiveFloorId) ?? OFFICE_FLOORS[0];
   const activeRoster = floorRosterCache[activeFloor.id];
 
   return (
@@ -121,7 +133,7 @@ export function OfficeFloorNav({
             Building
           </div>
           {buildingFloors.map((floor) =>
-            renderFloorButton({ floor, activeFloorId, floorRosterCache, onSelectFloor }),
+            renderFloorButton({ floor, activeFloorId: displayActiveFloorId, floorRosterCache, onSelectFloor }),
           )}
         </div>
         {outsideFloors.length > 0 ? (
@@ -130,7 +142,7 @@ export function OfficeFloorNav({
               Outside
             </div>
             {outsideFloors.map((floor) =>
-              renderFloorButton({ floor, activeFloorId, floorRosterCache, onSelectFloor }),
+              renderFloorButton({ floor, activeFloorId: displayActiveFloorId, floorRosterCache, onSelectFloor }),
             )}
           </div>
         ) : null}

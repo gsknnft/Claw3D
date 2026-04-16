@@ -80,6 +80,7 @@ import {
   listOfficeFloorsForProvider,
   resolveActiveOfficeFloorId,
   type FloorId,
+  type FloorProvider,
 } from "@/lib/office/floors";
 import {
   AgentEditorModal,
@@ -1479,6 +1480,15 @@ export function OfficeScreen({
         nextToken = profiles[adapterType]?.token ?? nextToken;
       } catch (error) {
         console.error("Failed to resolve floor runtime profile.", error);
+      }
+
+      // Guard: if this is a runtime floor and there's no gateway URL to connect to,
+      // bail back to lobby rather than entering a connect-hang limbo state.
+      if (floor.kind === "runtime" && !nextGatewayUrl.trim()) {
+        setActiveFloorId("lobby");
+        settingsCoordinator.schedulePatch({ activeFloorId: "lobby" }, 0);
+        setAgentsLoaded(true);
+        return;
       }
 
       setSelectedAdapterType(adapterType);
@@ -4741,6 +4751,7 @@ export function OfficeScreen({
         onSelectFloor={(floorId) => {
           void handleSelectFloor(floorId);
         }}
+        activeAdapterType={(selectedAdapterType as FloorProvider) ?? null}
       />
       <section className="relative h-full min-h-0 min-w-0 overflow-hidden">
         <RetroOffice3D
