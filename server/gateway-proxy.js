@@ -207,14 +207,14 @@ function createGatewayProxy(options) {
     };
 
     const forwardConnectFrame = (frame) => {
-      const browserHasToken = hasNonEmptyToken(frame.params);
-      const browserHasAlternativeAuth =
+      const browserHasAuth =
+        hasNonEmptyToken(frame.params) ||
         hasNonEmptyPassword(frame.params) ||
         hasNonEmptyDeviceToken(frame.params) ||
         hasCompleteDeviceAuth(frame.params);
 
       const requiresToken = upstreamAdapterType === "openclaw";
-      if (requiresToken && !upstreamToken && !browserHasToken && !browserHasAlternativeAuth) {
+      if (requiresToken && !upstreamToken && !browserHasAuth) {
         sendConnectError(
           "studio.gateway_token_missing",
           "Upstream gateway token is not configured on the Studio host."
@@ -222,13 +222,36 @@ function createGatewayProxy(options) {
         return;
       }
 
-      const connectFrame =
-        !browserHasToken && upstreamToken
-          ? {
-              ...frame,
-              params: injectAuthToken(frame.params, upstreamToken),
-            }
-          : frame;
+      const baseConnectFrame = browserHasAuth
+        ? frame
+        : {
+            ...frame,
+            params: injectAuthToken(frame.params, upstreamToken),
+          };
+
+      const connectParams = isObject(baseConnectFrame.params)
+        ? { ...baseConnectFrame.params }
+        : {};
+      const hasDeviceAuth = hasCompleteDeviceAuth(connectParams);
+      const client = isObject(connectParams.client) ? { ...connectParams.client } : {};
+      const clientId = typeof client.id === "string" ? client.id.trim() : "";
+
+      if (
+        upstreamAdapterType === "openclaw" &&
+        clientId === "openclaw-control-ui" &&
+        !hasDeviceAuth
+      ) {
+        client.id = "webchat-ui";
+        connectParams.client = client;
+        if (isObject(connectParams.device) && !hasCompleteDeviceAuth(connectParams)) {
+          delete connectParams.device;
+        }
+      }
+
+      const connectFrame = {
+        ...baseConnectFrame,
+        params: connectParams,
+      };
       upstreamWs.send(JSON.stringify(connectFrame));
     };
 

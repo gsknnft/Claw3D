@@ -285,6 +285,7 @@ export type StudioSettingsPatch = {
 const SETTINGS_VERSION = 1 as const;
 const DEFAULT_OPENCLAW_GATEWAY_URL = "ws://localhost:18789";
 const DEFAULT_LOCAL_ADAPTER_GATEWAY_URL = "ws://localhost:18789";
+const DEFAULT_PAPERCLIP_ADAPTER_GATEWAY_URL = "ws://localhost:18791";
 const DEFAULT_LOCAL_RUNTIME_URL = "http://localhost:7770";
 const DEFAULT_CLAW3D_RUNTIME_URL = "http://localhost:3000/api/runtime/custom";
 const DEFAULT_CUSTOM_RUNTIME_URL = "http://localhost:7770";
@@ -982,6 +983,8 @@ export const resolveDefaultStudioGatewayProfile = (
     case "hermes":
     case "demo":
       return { url: DEFAULT_LOCAL_ADAPTER_GATEWAY_URL, token: "" };
+    case "paperclip":
+      return { url: DEFAULT_PAPERCLIP_ADAPTER_GATEWAY_URL, token: "" };
     case "openclaw":
     default:
       return { url: DEFAULT_OPENCLAW_GATEWAY_URL, token: "" };
