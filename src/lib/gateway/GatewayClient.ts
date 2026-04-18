@@ -754,15 +754,17 @@ export const useGatewayConnection = (
                 localGatewayDefaultsPrivate: null,
               };
         const settings = envelope.settings ?? null;
-        const gateway = envelope.gatewayPrivate ?? null;
+        // gatewayPrivate is no longer sent by the server — upstream tokens must not
+        // cross the browser API boundary. The Studio proxy injects tokens server-side.
+        // We derive profiles from the sanitized public settings only.
         if (cancelled) return;
         const normalizedDefaults = normalizeLocalGatewayDefaults(
-          envelope.localGatewayDefaultsPrivate ?? envelope.localGatewayDefaults,
+          envelope.localGatewayDefaults,
         );
         setLocalGatewayDefaults(normalizedDefaults);
-        const gatewaySettings: StudioGatewaySettings | null = gateway;
+        const gatewaySettings = settings?.gateway ?? null;
         const resolvedGatewayProfiles = resolveStudioGatewayProfiles({
-          gateway: gatewaySettings,
+          gateway: gatewaySettings as StudioGatewaySettings | null,
           localDefaults: normalizedDefaults,
         });
         const nextAdapterType = resolvedGatewayProfiles.selectedAdapterType;

@@ -24,8 +24,9 @@ export async function GET() {
       {
         settings: sanitizeStudioSettings(settings),
         localGatewayDefaults: sanitizeStudioGatewaySettings(localGatewayDefaults),
-        gatewayPrivate: settings.gateway,
-        localGatewayDefaultsPrivate: localGatewayDefaults,
+        // gatewayPrivate and localGatewayDefaultsPrivate are intentionally omitted.
+        // Upstream tokens must not cross the browser API boundary — the Studio proxy
+        // (server/gateway-proxy.js) injects the server-side token into connect frames.
       },
       { headers: { "Cache-Control": "no-store" } }
     );
@@ -50,8 +51,8 @@ export async function PUT(request: Request) {
     return NextResponse.json(
       {
         settings: sanitizeStudioSettings(settings),
-        gatewayPrivate: settings.gateway,
-        localGatewayDefaultsPrivate: loadLocalGatewayDefaults(),
+        localGatewayDefaults: sanitizeStudioGatewaySettings(loadLocalGatewayDefaults()),
+        // gatewayPrivate intentionally omitted — see GET handler comment.
       },
       { headers: { "Cache-Control": "no-store" } }
     );

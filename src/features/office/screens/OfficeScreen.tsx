@@ -1456,28 +1456,24 @@ export function OfficeScreen({
             ? await settingsCoordinator.loadSettingsEnvelope({ maxAgeMs: 30_000 })
             : {
                 settings: await settingsCoordinator.loadSettings({ maxAgeMs: 30_000 }),
-                gatewayPrivate: null,
-                localGatewayDefaultsPrivate: null,
+                localGatewayDefaults: null,
               };
         const settings = envelope.settings ?? null;
-        const gateway = envelope.gatewayPrivate ?? null;
-        const gatewaySettings: StudioGatewaySettings | null = gateway
-          ? {
-              ...gateway,
-              profiles: {
-                ...(gateway.profiles ?? {}),
-                ...adapterProfiles,
-              },
-            }
-          : null;
+        // gatewayPrivate is not in the API response — use sanitized public settings + in-memory
+        // adapterProfiles (which may carry a URL from a previous successful connection).
+        const gatewaySettings: StudioGatewaySettings | null =
+          adapterProfiles && Object.keys(adapterProfiles).length > 0
+            ? ({ profiles: adapterProfiles } as StudioGatewaySettings)
+            : null;
         const { profiles } = resolveStudioGatewayProfiles({
           gateway: gatewaySettings,
-          localDefaults: envelope.localGatewayDefaultsPrivate ?? localGatewayDefaults,
+          localDefaults: localGatewayDefaults,
         });
         const floorRuntime = settings?.officeFloors?.[resolved];
         nextGatewayUrl =
           floorRuntime?.gatewayUrl?.trim() || profiles[adapterType]?.url?.trim() || nextGatewayUrl;
-        nextToken = profiles[adapterType]?.token ?? nextToken;
+        // Token is intentionally empty — the Studio proxy injects the server-side token.
+        nextToken = "";
       } catch (error) {
         console.error("Failed to resolve floor runtime profile.", error);
       }
