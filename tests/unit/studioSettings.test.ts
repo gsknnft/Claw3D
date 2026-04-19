@@ -438,4 +438,81 @@ describe("studio settings normalization", () => {
       token: "",
     });
   });
+
+  it("merging lastKnownGood with an empty-string token does not overwrite a stored token", () => {
+    const current = normalizeStudioSettings({
+      gateway: {
+        url: "ws://localhost:18789",
+        token: "stored-token",
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          token: "stored-token",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    const merged = mergeStudioSettings(current, {
+      gateway: {
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          token: "",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    expect(merged.gateway?.lastKnownGood?.token).toBe("stored-token");
+  });
+
+  it("merging lastKnownGood with a real token overwrites the stored token", () => {
+    const current = normalizeStudioSettings({
+      gateway: {
+        url: "ws://localhost:18789",
+        token: "old-token",
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          token: "old-token",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    const merged = mergeStudioSettings(current, {
+      gateway: {
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          token: "new-token",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    expect(merged.gateway?.lastKnownGood?.token).toBe("new-token");
+  });
+
+  it("merging lastKnownGood with undefined token leaves the stored token unchanged", () => {
+    const current = normalizeStudioSettings({
+      gateway: {
+        url: "ws://localhost:18789",
+        token: "stored-token",
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          token: "stored-token",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    const merged = mergeStudioSettings(current, {
+      gateway: {
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    expect(merged.gateway?.lastKnownGood?.token).toBe("stored-token");
+  });
 });

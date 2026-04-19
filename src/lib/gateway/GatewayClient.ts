@@ -943,7 +943,7 @@ export const useGatewayConnection = (
         gateway: {
           lastKnownGood: {
             url: gatewayUrl.trim(),
-            token,
+            token: token || undefined,
             adapterType: nextDetectedAdapterType,
           },
         },

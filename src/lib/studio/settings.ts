@@ -917,8 +917,8 @@ const mergeGatewayConnectionState = (
   const nextUrl =
     patch.url === undefined ? current?.url ?? "" : normalizeGatewayUrl(patch.url);
   if (!nextUrl) return null;
-  const nextToken =
-    patch.token === undefined ? current?.token ?? "" : coerceString(patch.token);
+  const patchedToken = patch.token === undefined ? undefined : coerceString(patch.token);
+  const nextToken = patchedToken || (current?.token ?? "");
   const nextAdapterType =
     patch.adapterType === undefined
       ? current?.adapterType ?? "openclaw"
