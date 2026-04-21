@@ -13,7 +13,7 @@ const VALID_ADAPTER_TYPES = new Set([
   "custom",
 ]);
 const TUNNEL_HOST_PATTERN =
-  /(cloudflare|trycloudflare|ngrok|tailscale|ts\.net|tunnel)/i;
+  /(cloudflare|trycloudflare|ngrok|tailscale|tunnel)/i;
 const DEFAULT_GATEWAY_URL_BY_ADAPTER = {
   openclaw: "ws://localhost:18789",
   hermes: "ws://localhost:18789",
@@ -27,6 +27,13 @@ const isRecord = (value) =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
 const trimString = (value) => (typeof value === "string" ? value.trim() : "");
+const hasHostnameSuffix = (hostname, suffix) =>
+  hostname === suffix || hostname.endsWith(`.${suffix}`);
+const isTunnelBackedHostname = (hostname) =>
+  Boolean(
+    hostname &&
+      (TUNNEL_HOST_PATTERN.test(hostname) || hasHostnameSuffix(hostname, "ts.net")),
+  );
 const supportsAnsi = () =>
   Boolean(process.stdout?.isTTY && process.env.NO_COLOR !== "1");
 const colorize = (text, code) =>
@@ -143,7 +150,7 @@ export const buildGatewayWarnings = ({
     );
   }
 
-  if (isRemote && TUNNEL_HOST_PATTERN.test(hostname)) {
+  if (isRemote && isTunnelBackedHostname(hostname)) {
     warnings.push(
       "Gateway host looks tunnel-backed. If connect fails, compare direct local/LAN behavior before debugging the runtime itself.",
     );
@@ -220,7 +227,7 @@ export const buildOpenClawWarnings = ({
     );
   }
 
-  if (TUNNEL_HOST_PATTERN.test(hostname)) {
+  if (isTunnelBackedHostname(hostname)) {
     warnings.push(
       "Remote OpenClaw host looks tunnel-backed. If you hit 1008/1011/1012-style failures, verify direct local or LAN access first, then check pairing/device approval and reverse-proxy websocket handling.",
     );
@@ -281,12 +288,10 @@ export const buildGatewayFailureActions = ({
     parsedUrl = url ? new URL(url) : null;
   } catch {}
   const hostname = parsedUrl?.hostname?.toLowerCase() ?? "";
-  const isTunnelBacked = Boolean(
-    hostname && TUNNEL_HOST_PATTERN.test(hostname),
-  );
+  const isTunnelBacked = isTunnelBackedHostname(hostname);
   const isCloudflare = hostname.includes("cloudflare");
   const isTailscale =
-    hostname.includes("tailscale") || hostname.endsWith("ts.net");
+    hostname.includes("tailscale") || hasHostnameSuffix(hostname, "ts.net");
 
   if (normalized.includes("econnrefused") || normalized.includes("timed out")) {
     actions.push(
