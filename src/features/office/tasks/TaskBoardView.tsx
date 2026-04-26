@@ -1,10 +1,30 @@
 "use client";
 
-import type { DragEvent, KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Plus, RefreshCw, Trash2 } from "lucide-react";
+import {
+  type DragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+import {
+  AlertCircle,
+  CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Clock,
+  Eye,
+  EyeOff,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 
 import type { AgentState } from "@/features/agents/state/store";
 import type { CronJobSummary } from "@/lib/cron/types";
+import { formatCronSchedule } from "@/lib/cron/types";
 import type { TaskBoardCard, TaskBoardStatus } from "@/features/office/tasks/types";
 
 const STATUS_LABELS: Record<TaskBoardStatus, string> = {
@@ -34,11 +54,18 @@ const formatRelativeTime = (value: string | null) => {
   return `${Math.max(1, Math.floor(delta / 86_400_000))}d ago`;
 };
 
+const formatMs = (ms: number | undefined) => {
+  if (!ms) return null;
+  return new Date(ms).toLocaleString();
+};
+
 const stopAndGetCardId = (event: DragEvent<HTMLElement>) => {
   event.preventDefault();
   event.stopPropagation();
   return event.dataTransfer.getData("text/task-card-id").trim();
 };
+
+type CronAlert = { jobId: string; name: string; status: "ok" | "error"; at: number };
 
 export function TaskBoardView({
   title,
@@ -88,8 +115,71 @@ export function TaskBoardView({
   onDeleteCard: (cardId: string) => void;
   onRefreshCronJobs: () => void;
 }) {
+  const [hideSystemTasks, setHideSystemTasks] = useState(true);
+  const [clearPending, setClearPending] = useState<"system" | "all" | null>(null);
+  const [cronExpanded, setCronExpanded] = useState(false);
+  const [cronAlerts, setCronAlerts] = useState<CronAlert[]>([]);
+
+  // Track running jobs to detect completions and fire alerts
+  const prevRunningRef = useRef<Map<string, boolean>>(new Map());
+  useEffect(() => {
+    const prev = prevRunningRef.current;
+    const next = new Map<string, boolean>();
+    const newAlerts: CronAlert[] = [];
+
+    for (const job of cronJobs) {
+      const isRunning = Boolean(job.state.runningAtMs);
+      next.set(job.id, isRunning);
+      const wasRunning = prev.get(job.id);
+      if (wasRunning && !isRunning && job.state.lastStatus) {
+        newAlerts.push({
+          jobId: job.id,
+          name: job.name,
+          status: job.state.lastStatus === "ok" ? "ok" : "error",
+          at: Date.now(),
+        });
+      }
+    }
+
+    prevRunningRef.current = next;
+    if (newAlerts.length > 0) {
+      setCronAlerts((prev) => [...prev, ...newAlerts]);
+      // Auto-dismiss after 30 seconds
+      const ids = newAlerts.map((a) => a.jobId);
+      setTimeout(() => {
+        setCronAlerts((prev) => prev.filter((a) => !ids.includes(a.jobId)));
+      }, 30_000);
+    }
+  }, [cronJobs]);
+
+  const allCards = STATUS_ORDER.flatMap((s) => cardsByStatus[s]);
+  const systemCards = allCards.filter((c) => c.isInferred);
+  const systemCardCount = systemCards.length;
+
+  const filteredCardsByStatus: Record<TaskBoardStatus, TaskBoardCard[]> = hideSystemTasks
+    ? Object.fromEntries(
+        STATUS_ORDER.map((s) => [s, cardsByStatus[s].filter((c) => !c.isInferred)]),
+      ) as Record<TaskBoardStatus, TaskBoardCard[]>
+    : cardsByStatus;
+
+  const handleClearConfirm = () => {
+    if (clearPending === "system") {
+      for (const card of systemCards) {
+        onDeleteCard(card.id);
+      }
+    } else if (clearPending === "all") {
+      for (const card of allCards) {
+        onDeleteCard(card.id);
+      }
+    }
+    setClearPending(null);
+  };
+
+  const runningJobs = cronJobs.filter((j) => j.state.runningAtMs);
+
   return (
     <section className="flex h-full min-h-0 flex-col bg-transparent text-white">
+      {/* Header */}
       <div className="border-b border-cyan-500/10 bg-[#070b11]/22 px-4 py-3 backdrop-blur-[1px]">
         <div className="flex items-start justify-between gap-3">
           <div>
@@ -99,6 +189,65 @@ export function TaskBoardView({
             <div className="mt-1 font-mono text-[11px] text-white/40">{subtitle}</div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Filter toggle */}
+            <button
+              type="button"
+              onClick={() => setHideSystemTasks((v) => !v)}
+              title={hideSystemTasks ? "Show system tasks" : "Hide system tasks"}
+              className="inline-flex items-center gap-1 rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/70 transition-colors hover:border-white/20 hover:text-white"
+            >
+              {hideSystemTasks ? (
+                <EyeOff className="h-3 w-3" />
+              ) : (
+                <Eye className="h-3 w-3" />
+              )}
+              {hideSystemTasks ? `System (${systemCardCount})` : "Hide system"}
+            </button>
+
+            {/* Bulk clear */}
+            {clearPending ? (
+              <div className="flex items-center gap-1">
+                <span className="font-mono text-[10px] text-rose-200/80">
+                  Clear {clearPending === "all" ? "all" : "system"} tasks?
+                </span>
+                <button
+                  type="button"
+                  onClick={handleClearConfirm}
+                  className="rounded border border-rose-500/40 bg-rose-500/15 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-rose-100 hover:border-rose-400/60"
+                >
+                  Confirm
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClearPending(null)}
+                  className="rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] text-white/50 hover:text-white"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                {systemCardCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setClearPending("system")}
+                    className="rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/70 transition-colors hover:border-rose-400/30 hover:text-rose-200"
+                  >
+                    Clear system ({systemCardCount})
+                  </button>
+                )}
+                {allCards.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setClearPending("all")}
+                    className="rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/70 transition-colors hover:border-rose-400/30 hover:text-rose-200"
+                  >
+                    Clear all
+                  </button>
+                )}
+              </div>
+            )}
+
             <button
               type="button"
               onClick={onRefreshCronJobs}
@@ -116,11 +265,124 @@ export function TaskBoardView({
             </button>
           </div>
         </div>
+
+        {/* Cron job completion alerts */}
+        {cronAlerts.map((alert) => (
+          <div
+            key={`${alert.jobId}-${alert.at}`}
+            className={`mt-2 flex items-center justify-between gap-2 rounded border px-3 py-2 font-mono text-[11px] ${
+              alert.status === "ok"
+                ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-100"
+                : "border-rose-500/30 bg-rose-500/10 text-rose-100"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {alert.status === "ok" ? (
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+              )}
+              <span>
+                Job &ldquo;{alert.name}&rdquo; {alert.status === "ok" ? "completed." : "failed."}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setCronAlerts((prev) => prev.filter((a) => a.jobId !== alert.jobId))
+              }
+              className="text-white/40 hover:text-white/80"
+            >
+              <X className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        ))}
+
         {cronError ? (
           <div className="mt-2 rounded border border-rose-500/30 bg-rose-500/10 px-3 py-2 font-mono text-[11px] text-rose-100">
             {cronError}
           </div>
         ) : null}
+
+        {/* Cron jobs panel */}
+        {cronJobs.length > 0 ? (
+          <div className="mt-2">
+            <button
+              type="button"
+              onClick={() => setCronExpanded((v) => !v)}
+              className="flex w-full items-center gap-2 rounded border border-white/8 bg-white/[0.03] px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/50 hover:text-white/75"
+            >
+              {cronExpanded ? (
+                <ChevronUp className="h-3 w-3 shrink-0" />
+              ) : (
+                <ChevronDown className="h-3 w-3 shrink-0" />
+              )}
+              <span>Scheduled jobs ({cronJobs.length})</span>
+              {runningJobs.length > 0 && (
+                <span className="ml-1 inline-flex items-center gap-1 rounded bg-cyan-500/20 px-1.5 py-0.5 text-cyan-200">
+                  <span className="inline-block h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
+                  {runningJobs.length} running
+                </span>
+              )}
+            </button>
+            {cronExpanded && (
+              <div className="mt-1 space-y-1.5 rounded border border-white/8 bg-white/[0.02] px-3 py-3">
+                {cronJobs.map((job) => {
+                  const isRunning = Boolean(job.state.runningAtMs);
+                  const lastStatus = job.state.lastStatus;
+                  return (
+                    <div
+                      key={job.id}
+                      className="flex items-start justify-between gap-3 rounded border border-white/6 bg-black/10 px-3 py-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          {isRunning ? (
+                            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-cyan-400" />
+                          ) : lastStatus === "ok" ? (
+                            <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-400" />
+                          ) : lastStatus === "error" ? (
+                            <AlertCircle className="h-3 w-3 shrink-0 text-rose-400" />
+                          ) : (
+                            <Clock className="h-3 w-3 shrink-0 text-white/30" />
+                          )}
+                          <span className="truncate text-[11px] font-medium text-white/80">
+                            {job.name}
+                          </span>
+                          {!job.enabled && (
+                            <span className="rounded bg-white/8 px-1 py-0.5 font-mono text-[9px] uppercase text-white/30">
+                              Disabled
+                            </span>
+                          )}
+                        </div>
+                        <div className="mt-1 font-mono text-[10px] text-white/35">
+                          {formatCronSchedule(job.schedule)}
+                          {job.agentId ? ` · ${job.agentId}` : ""}
+                        </div>
+                        {job.state.lastError && (
+                          <div className="mt-1 truncate font-mono text-[10px] text-rose-300/70">
+                            {job.state.lastError}
+                          </div>
+                        )}
+                      </div>
+                      <div className="shrink-0 text-right font-mono text-[10px] text-white/30">
+                        {isRunning ? (
+                          <div className="text-cyan-300/70">Running…</div>
+                        ) : job.state.nextRunAtMs ? (
+                          <div>Next: {formatMs(job.state.nextRunAtMs)}</div>
+                        ) : null}
+                        {job.state.lastRunAtMs ? (
+                          <div>Last: {formatRelativeTime(new Date(job.state.lastRunAtMs).toISOString())}</div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : null}
+
         {taskCaptureDebug ? (
           <details className="mt-2 rounded border border-amber-400/20 bg-amber-400/5 px-3 py-2 font-mono text-[11px] text-amber-50">
             <summary className="cursor-pointer list-none select-none">
@@ -133,18 +395,10 @@ export function TaskBoardView({
               </div>
             </summary>
             <div className="mt-2 grid gap-1 text-white/80">
-              <div>
-                Last request: {taskCaptureDebug.lastTitle ?? "None yet."}
-              </div>
-              <div>
-                Last task id: {taskCaptureDebug.lastTaskId ?? "-"}
-              </div>
-              <div>
-                Session/thread: {taskCaptureDebug.lastSessionKey ?? "-"}
-              </div>
-              <div>
-                Last update: {formatRelativeTime(taskCaptureDebug.lastUpdatedAt)}
-              </div>
+              <div>Last request: {taskCaptureDebug.lastTitle ?? "None yet."}</div>
+              <div>Last task id: {taskCaptureDebug.lastTaskId ?? "-"}</div>
+              <div>Session/thread: {taskCaptureDebug.lastSessionKey ?? "-"}</div>
+              <div>Last update: {formatRelativeTime(taskCaptureDebug.lastUpdatedAt)}</div>
               <div>
                 Shared store:{" "}
                 {taskCaptureDebug.sharedTasksSupported
@@ -154,7 +408,8 @@ export function TaskBoardView({
                   : "Unavailable."}
               </div>
               <div>
-                Note: {taskCaptureDebug.lastMessage ?? "Waiting for inbound request detection."}
+                Note:{" "}
+                {taskCaptureDebug.lastMessage ?? "Waiting for inbound request detection."}
               </div>
               {taskCaptureDebug.sharedTasksError ? (
                 <div className="text-rose-200">
@@ -166,11 +421,14 @@ export function TaskBoardView({
         ) : null}
       </div>
 
-      <div className={`grid min-h-0 flex-1 overflow-hidden ${selectedCard ? "grid-cols-[minmax(0,1fr)_300px]" : "grid-cols-1"}`}>
+      {/* Board */}
+      <div
+        className={`grid min-h-0 flex-1 overflow-hidden ${selectedCard ? "grid-cols-[minmax(0,1fr)_300px]" : "grid-cols-1"}`}
+      >
         <div className="min-h-0 overflow-auto px-4 py-4">
           <div className="grid min-w-[700px] grid-cols-5 gap-3">
             {STATUS_ORDER.map((status) => {
-              const cards = cardsByStatus[status];
+              const cards = filteredCardsByStatus[status];
               return (
                 <div
                   key={status}
@@ -210,10 +468,15 @@ export function TaskBoardView({
                             event.dataTransfer.setData("text/task-card-id", card.id);
                             event.dataTransfer.effectAllowed = "move";
                           }}
-                          onClick={() => onSelectCard(selectedCard?.id === card.id ? null : card.id)}
+                          onClick={() =>
+                            onSelectCard(selectedCard?.id === card.id ? null : card.id)
+                          }
                           onKeyDown={(event: ReactKeyboardEvent) => {
                             const currentIdx = STATUS_ORDER.indexOf(card.status);
-                            if (event.key === "ArrowRight" && currentIdx < STATUS_ORDER.length - 1) {
+                            if (
+                              event.key === "ArrowRight" &&
+                              currentIdx < STATUS_ORDER.length - 1
+                            ) {
                               event.preventDefault();
                               onMoveCard(card.id, STATUS_ORDER[currentIdx + 1]!);
                             } else if (event.key === "ArrowLeft" && currentIdx > 0) {
