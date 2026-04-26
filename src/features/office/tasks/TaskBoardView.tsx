@@ -455,10 +455,12 @@ export function TaskBoardView({
           <CanvasBoard
             canvas={canvas}
             cardMap={cardMap}
+            agents={agents}
             onCanvasChangeAction={setCanvas}
             onMoveCardAction={onMoveCardAction}
             onCreateCardAction={onCreateCardAction}
             onSelectCardAction={onSelectCardAction}
+            onUpdateCardAction={onUpdateCardAction}
             selectedCardId={selectedCard?.id ?? null}
           />
         )}

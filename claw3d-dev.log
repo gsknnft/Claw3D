@@ -1,0 +1,170 @@
+
+> claw3d@0.1.4 dev C:\Users\G\Desktop\Builds\sigilnet\isolation\Claw3D
+> node server/index.js --dev
+
+Open in browser: http://localhost:3000
+○ Compiling /office ...
+ GET /office 200 in 25.1s (next.js: 24.1s, application-code: 1078ms)
+ GET /office 200 in 73ms (next.js: 5ms, application-code: 67ms)
+ GET /office 200 in 192ms (next.js: 9ms, application-code: 183ms)
+⨯ ./src/lib/skills/skill-safe/index.ts:7:1
+Module not found: Can't resolve './rules.js'
+   5 | } from "./rules.js";
+   6 |
+>  7 | export { RULES } from "./rules.js";
+     | ^
+   8 |
+   9 | export type {
+  10 |   SanitizationFlag,
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./src/lib/skills/sanitize.ts
+./src/lib/skills/presentation.ts
+./src/features/office/screens/OfficeScreen.tsx
+⨯ ./src/lib/skills/skill-safe/index.ts:7:1
+Module not found: Can't resolve './rules.js'
+   5 | } from "./rules.js";
+   6 |
+>  7 | export { RULES } from "./rules.js";
+     | ^
+   8 |
+   9 | export type {
+  10 |   SanitizationFlag,
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./src/lib/skills/sanitize.ts
+./src/lib/skills/presentation.ts
+./src/features/office/screens/OfficeScreen.tsx
+⨯ ./src/lib/skills/skill-safe/index.ts:7:1
+Module not found: Can't resolve './rules.js'
+   5 | } from "./rules.js";
+   6 |
+>  7 | export { RULES } from "./rules.js";
+     | ^
+   8 |
+   9 | export type {
+  10 |   SanitizationFlag,
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./src/lib/skills/sanitize.ts
+./src/lib/skills/presentation.ts
+./src/features/office/screens/OfficeScreen.tsx
+⨯ ./src/lib/skills/skill-safe/index.ts:7:1
+Module not found: Can't resolve './rules.js'
+   5 | } from "./rules.js";
+   6 |
+>  7 | export { RULES } from "./rules.js";
+     | ^
+   8 |
+   9 | export type {
+  10 |   SanitizationFlag,
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./src/lib/skills/sanitize.ts
+./src/lib/skills/presentation.ts
+./src/features/office/screens/OfficeScreen.tsx
+⨯ ./src/lib/skills/skill-safe/index.ts:7:1
+Module not found: Can't resolve './rules.js'
+   5 | } from "./rules.js";
+   6 |
+>  7 | export { RULES } from "./rules.js";
+     | ^
+   8 |
+   9 | export type {
+  10 |   SanitizationFlag,
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./src/lib/skills/sanitize.ts
+./src/lib/skills/presentation.ts
+./src/features/office/screens/OfficeScreen.tsx
+⨯ ./src/lib/skills/skill-safe/index.ts:7:1
+Module not found: Can't resolve './rules.js'
+   5 | } from "./rules.js";
+   6 |
+>  7 | export { RULES } from "./rules.js";
+     | ^
+   8 |
+   9 | export type {
+  10 |   SanitizationFlag,
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./src/lib/skills/sanitize.ts
+./src/lib/skills/presentation.ts
+./src/features/office/screens/OfficeScreen.tsx
+⨯ ./src/lib/skills/skill-safe/index.ts:7:1
+Module not found: Can't resolve './rules.js'
+   5 | } from "./rules.js";
+   6 |
+>  7 | export { RULES } from "./rules.js";
+     | ^
+   8 |
+   9 | export type {
+  10 |   SanitizationFlag,
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./src/lib/skills/sanitize.ts
+./src/lib/skills/presentation.ts
+./src/features/office/screens/OfficeScreen.tsx
+⨯ ./src/lib/skills/skill-safe/index.ts:7:1
+Module not found: Can't resolve './rules.js'
+   5 | } from "./rules.js";
+   6 |
+>  7 | export { RULES } from "./rules.js";
+     | ^
+   8 |
+   9 | export type {
+  10 |   SanitizationFlag,
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./src/lib/skills/sanitize.ts
+./src/lib/skills/presentation.ts
+./src/features/office/screens/OfficeScreen.tsx
+⨯ ./src/lib/skills/skill-safe/index.ts:7:1
+Module not found: Can't resolve './rules.js'
+   5 | } from "./rules.js";
+   6 |
+>  7 | export { RULES } from "./rules.js";
+     | ^
+   8 |
+   9 | export type {
+  10 |   SanitizationFlag,
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./src/lib/skills/sanitize.ts
+./src/lib/skills/presentation.ts
+./src/features/office/screens/OfficeScreen.tsx
+⨯ ./src/lib/skills/skill-safe/index.ts:7:1
+Module not found: Can't resolve './rules.js'
+   5 | } from "./rules.js";
+   6 |
+>  7 | export { RULES } from "./rules.js";
+     | ^
+   8 |
+   9 | export type {
+  10 |   SanitizationFlag,
+
+https://nextjs.org/docs/messages/module-not-found
+
+Import trace for requested module:
+./src/lib/skills/sanitize.ts
+./src/lib/skills/presentation.ts
+./src/features/office/screens/OfficeScreen.tsx
+ ELIFECYCLE  Command failed with exit code 1.

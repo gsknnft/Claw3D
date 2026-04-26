@@ -1157,6 +1157,58 @@ export function OfficeScreen({
     () => getOfficeFloor(resolveActiveOfficeFloorId(activeFloorId)),
     [activeFloorId],
   );
+  const activeFloorIsDemo =
+    activeFloor.kind === "lobby" && activeFloor.provider === "demo";
+
+  useEffect(() => {
+    if (!activeFloorIsDemo) return;
+
+    setPendingFloorRuntimeSwitch(null);
+    if (selectedAdapterType !== "demo") {
+      setSelectedAdapterType("demo");
+    }
+    if (status === "connected" || status === "connecting") {
+      disconnect();
+    }
+    if (state.agents.length === 0) {
+      hydrateAgents([createDemoMainAgentSeed()], MAIN_AGENT_ID);
+      dispatch({ type: "selectAgent", agentId: MAIN_AGENT_ID });
+    }
+    if (!agentsLoaded) {
+      setAgentsLoaded(true);
+    }
+    setFloorRosterCache((previous) => {
+      const current = previous[activeFloor.id];
+      if (
+        current?.status === "loaded" &&
+        current.entries.some((entry) => entry.agentId === MAIN_AGENT_ID)
+      ) {
+        return previous;
+      }
+      return {
+        ...previous,
+        [activeFloor.id]: buildFloorRosterState({
+          floorId: activeFloor.id,
+          hydratedAt: Date.now(),
+          result: {
+            seeds: [createDemoMainAgentSeed()],
+            suggestedSelectedAgentId: MAIN_AGENT_ID,
+          },
+        }),
+      };
+    });
+  }, [
+    activeFloor.id,
+    activeFloorIsDemo,
+    agentsLoaded,
+    disconnect,
+    dispatch,
+    hydrateAgents,
+    selectedAdapterType,
+    setSelectedAdapterType,
+    state.agents.length,
+    status,
+  ]);
 
   useEffect(() => {
     activeFloorIdRef.current = activeFloorId;
@@ -1446,6 +1498,37 @@ export function OfficeScreen({
       settingsCoordinator.schedulePatch({ activeFloorId: resolved }, 0);
       setOfficeCameraCenterSignal((current) => current + 1);
 
+      if (floor.kind !== "runtime") {
+        setPendingFloorRuntimeSwitch(null);
+        if (status === "connected" || status === "connecting") {
+          disconnect();
+        }
+        if (floor.provider === "demo") {
+          setSelectedAdapterType("demo");
+          hydrateAgents([createDemoMainAgentSeed()], MAIN_AGENT_ID);
+          setAgentsLoaded(true);
+          focusLocalAgent(MAIN_AGENT_ID, {
+            openChat: false,
+            persistFloorId: resolved,
+            selectStore: true,
+          });
+          setFloorRosterCache((previous) => ({
+            ...previous,
+            [resolved]: buildFloorRosterState({
+              floorId: resolved,
+              hydratedAt: Date.now(),
+              result: {
+                seeds: [createDemoMainAgentSeed()],
+                suggestedSelectedAgentId: MAIN_AGENT_ID,
+              },
+            }),
+          }));
+          return;
+        }
+        setAgentsLoaded(true);
+        return;
+      }
+
       const adapterType = floor.provider as StudioGatewayAdapterType;
       let nextGatewayUrl = gatewayUrl.trim();
       let nextToken = token;
@@ -1511,13 +1594,16 @@ export function OfficeScreen({
     },
     [
       adapterProfiles,
+      disconnect,
       focusLocalAgent,
       gatewayUrl,
+      hydrateAgents,
       localGatewayDefaults,
       setGatewayUrl,
       setToken,
       setSelectedAdapterType,
       settingsCoordinator,
+      status,
       token,
     ],
   );
@@ -2750,7 +2836,7 @@ export function OfficeScreen({
       lastLoadAgentsStartedAtRef.current = 0;
       setLoading(false);
       if (stateRef.current.agents.length === 0) {
-        if (selectedAdapterType === "demo") {
+        if (activeFloorIsDemo || selectedAdapterType === "demo") {
           hydrateAgents([createDemoMainAgentSeed()], MAIN_AGENT_ID);
           setAgentsLoaded(true);
         } else {
@@ -2765,15 +2851,14 @@ export function OfficeScreen({
       prevAssistantPreviewRef.current = {};
       lastGatewayActivityAtRef.current = 0;
     }
-  }, [hydrateAgents, selectedAdapterType, setLoading, status]);
+  }, [activeFloorIsDemo, hydrateAgents, selectedAdapterType, setLoading, status]);
 
   useEffect(() => {
-    if (selectedAdapterType !== "demo") return;
-    if (status !== "disconnected") return;
+    if (!activeFloorIsDemo && selectedAdapterType !== "demo") return;
     if (state.agents.length > 0) return;
     hydrateAgents([createDemoMainAgentSeed()], MAIN_AGENT_ID);
     setAgentsLoaded(true);
-  }, [hydrateAgents, selectedAdapterType, state.agents.length, status]);
+  }, [activeFloorIsDemo, hydrateAgents, selectedAdapterType, state.agents.length]);
 
   useEffect(() => {
     if (!agentsLoaded) return;
@@ -4672,6 +4757,8 @@ export function OfficeScreen({
 
   const showGatewayLoadingOverlay =
     !agentsLoaded &&
+    !activeFloorIsDemo &&
+    selectedAdapterType !== "demo" &&
     (!connectPromptReady ||
       (gatewayUrl.trim().length > 0 &&
         !shouldPromptForConnect &&
@@ -4681,6 +4768,7 @@ export function OfficeScreen({
     connectPromptReady &&
     status === "disconnected" &&
     !agentsLoaded &&
+    !activeFloorIsDemo &&
     (shouldPromptForConnect || showDelayedGatewayConnectOverlay);
 
   const runningCount = state.agents.filter(
@@ -4767,7 +4855,7 @@ export function OfficeScreen({
           monitorAgentId={monitorAgentId}
           monitorByAgentId={monitorByAgentId}
           githubSkill={githubSkill}
-          taskManagerEnabled={taskManagerReady}
+          taskManagerEnabled={true}
           soundclawEnabled={soundclawReady}
           officeTitle={officeTitle}
           officeTitleLoaded={officeTitleLoaded}
