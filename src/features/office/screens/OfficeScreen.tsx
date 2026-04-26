@@ -5081,19 +5081,21 @@ export function OfficeScreen({
                 taskBoard.sharedTasksError ?? taskBoard.gatewayTasksError ?? taskBoard.cronError
               }
               taskCaptureDebug={showOpenClawConsole ? taskBoard.taskCaptureDebug : undefined}
-              onCreateCard={() => {
+              logEntries={showOpenClawConsole ? openClawLogEntries : undefined}
+              onCreateCardAction={() => {
                 taskBoard.createManualCard();
                 setActiveSidebarTab("kanban");
               }}
-              onMoveCard={taskBoard.moveCard}
-              onSelectCard={taskBoard.selectCard}
-              onUpdateCard={taskBoard.updateCard}
-              onDeleteCard={taskBoard.removeCard}
-              onRefreshCronJobs={() => {
+              onMoveCardAction={taskBoard.moveCard}
+              onSelectCardAction={taskBoard.selectCard}
+              onUpdateCardAction={taskBoard.updateCard}
+              onDeleteCardAction={taskBoard.removeCard}
+              onRefreshCronJobsAction={() => {
                 void taskBoard.refreshSharedTasks();
                 void taskBoard.refreshRemoteTasks();
                 void taskBoard.refreshCronJobs();
               }}
+              onClearLogsAction={handleClearOpenClawConsole}
             />
           }
           playbooksPanel={

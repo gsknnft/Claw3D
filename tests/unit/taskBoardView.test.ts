@@ -103,12 +103,12 @@ describe("TaskBoardView", () => {
         cronJobs: [createCronJob()],
         cronLoading: false,
         cronError: null,
-        onCreateCard,
-        onMoveCard,
-        onSelectCard,
-        onUpdateCard,
-        onDeleteCard,
-        onRefreshCronJobs,
+        onCreateCardAction: onCreateCard,
+        onMoveCardAction: onMoveCard,
+        onSelectCardAction: onSelectCard,
+        onUpdateCardAction: onUpdateCard,
+        onDeleteCardAction: onDeleteCard,
+        onRefreshCronJobsAction: onRefreshCronJobs,
       })
     );
 

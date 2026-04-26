@@ -3,7 +3,9 @@
 import {
   type DragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -26,7 +28,12 @@ import type { AgentState } from "@/features/agents/state/store";
 import type { CronJobSummary } from "@/lib/cron/types";
 import { formatCronSchedule } from "@/lib/cron/types";
 import type { TaskBoardCard, TaskBoardStatus } from "@/features/office/tasks/types";
+import { AgentLogsPanel, type AgentLogEntry } from "@/features/office/tasks/AgentLogsPanel";
+import { CanvasBoard, type JsonCanvas } from "@/features/office/tasks/CanvasBoard";
 
+// ---------------------------------------------------------------------------
+// Shared helpers
+// ---------------------------------------------------------------------------
 const STATUS_LABELS: Record<TaskBoardStatus, string> = {
   todo: "Todo",
   in_progress: "In Progress",
@@ -66,25 +73,14 @@ const stopAndGetCardId = (event: DragEvent<HTMLElement>) => {
 };
 
 type CronAlert = { jobId: string; name: string; status: "ok" | "error"; at: number };
+type Tab = "workspace" | "kanban" | "logs";
 
-export function TaskBoardView({
-  title,
-  subtitle,
-  agents,
-  cardsByStatus,
-  selectedCard,
-  activeRuns,
-  cronJobs,
-  cronLoading,
-  cronError,
-  taskCaptureDebug,
-  onCreateCard,
-  onMoveCard,
-  onSelectCard,
-  onUpdateCard,
-  onDeleteCard,
-  onRefreshCronJobs,
-}: {
+const EMPTY_CANVAS: JsonCanvas = { nodes: [], edges: [] };
+
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
+export type TaskBoardViewProps = {
   title: string;
   subtitle: string;
   agents: AgentState[];
@@ -94,6 +90,9 @@ export function TaskBoardView({
   cronJobs: CronJobSummary[];
   cronLoading: boolean;
   cronError: string | null;
+  /** Gateway event log entries — passed from OfficeScreen */
+  logEntries?: AgentLogEntry[];
+  onClearLogsAction?: () => void;
   taskCaptureDebug?: {
     lastStatus: "idle" | "detected" | "persisted" | "failed" | "unsupported";
     lastUpdatedAt: string | null;
@@ -108,30 +107,56 @@ export function TaskBoardView({
     sharedTasksLoading: boolean;
     sharedTasksError: string | null;
   };
-  onCreateCard: () => void;
-  onMoveCard: (cardId: string, status: TaskBoardStatus) => void;
-  onSelectCard: (cardId: string | null) => void;
-  onUpdateCard: (cardId: string, patch: Partial<TaskBoardCard>) => void;
-  onDeleteCard: (cardId: string) => void;
-  onRefreshCronJobs: () => void;
-}) {
+  onCreateCardAction: () => void;
+  onMoveCardAction: (cardId: string, status: TaskBoardStatus) => void;
+  onSelectCardAction: (cardId: string | null) => void;
+  onUpdateCardAction: (cardId: string, patch: Partial<TaskBoardCard>) => void;
+  onDeleteCardAction: (cardId: string) => void;
+  onRefreshCronJobsAction: () => void;
+};
+
+// ---------------------------------------------------------------------------
+// TaskBoardView
+// ---------------------------------------------------------------------------
+export function TaskBoardView({
+  title,
+  subtitle,
+  agents,
+  cardsByStatus,
+  selectedCard,
+  activeRuns,
+  cronJobs,
+  cronLoading,
+  cronError,
+  logEntries = [],
+  onClearLogsAction,
+  taskCaptureDebug,
+  onCreateCardAction,
+  onMoveCardAction,
+  onSelectCardAction,
+  onUpdateCardAction,
+  onDeleteCardAction,
+  onRefreshCronJobsAction,
+}: TaskBoardViewProps) {
+  const [activeTab, setActiveTab] = useState<Tab>("workspace");
+  const [canvas, setCanvas] = useState<JsonCanvas>(EMPTY_CANVAS);
+
+  // Kanban-specific state
   const [hideSystemTasks, setHideSystemTasks] = useState(true);
   const [clearPending, setClearPending] = useState<"system" | "all" | null>(null);
   const [cronExpanded, setCronExpanded] = useState(false);
   const [cronAlerts, setCronAlerts] = useState<CronAlert[]>([]);
 
-  // Track running jobs to detect completions and fire alerts
+  // Track cron job completions
   const prevRunningRef = useRef<Map<string, boolean>>(new Map());
   useEffect(() => {
     const prev = prevRunningRef.current;
     const next = new Map<string, boolean>();
     const newAlerts: CronAlert[] = [];
-
     for (const job of cronJobs) {
       const isRunning = Boolean(job.state.runningAtMs);
       next.set(job.id, isRunning);
-      const wasRunning = prev.get(job.id);
-      if (wasRunning && !isRunning && job.state.lastStatus) {
+      if (prev.get(job.id) && !isRunning && job.state.lastStatus) {
         newAlerts.push({
           jobId: job.id,
           name: job.name,
@@ -140,11 +165,9 @@ export function TaskBoardView({
         });
       }
     }
-
     prevRunningRef.current = next;
     if (newAlerts.length > 0) {
       setCronAlerts((prev) => [...prev, ...newAlerts]);
-      // Auto-dismiss after 30 seconds
       const ids = newAlerts.map((a) => a.jobId);
       setTimeout(() => {
         setCronAlerts((prev) => prev.filter((a) => !ids.includes(a.jobId)));
@@ -152,30 +175,64 @@ export function TaskBoardView({
     }
   }, [cronJobs]);
 
-  const allCards = STATUS_ORDER.flatMap((s) => cardsByStatus[s]);
-  const systemCards = allCards.filter((c) => c.isInferred);
-  const systemCardCount = systemCards.length;
+  // Sync canvas nodes when new real tasks arrive that aren't on canvas yet
+  const allCards = useMemo(
+    () => STATUS_ORDER.flatMap((s) => cardsByStatus[s]),
+    [cardsByStatus],
+  );
+  const realCards = useMemo(() => allCards.filter((c) => !c.isInferred), [allCards]);
 
-  const filteredCardsByStatus: Record<TaskBoardStatus, TaskBoardCard[]> = hideSystemTasks
-    ? Object.fromEntries(
-        STATUS_ORDER.map((s) => [s, cardsByStatus[s].filter((c) => !c.isInferred)]),
-      ) as Record<TaskBoardStatus, TaskBoardCard[]>
-    : cardsByStatus;
+  useEffect(() => {
+    setCanvas((prev) => {
+      const existingCardIds = new Set(
+        prev.nodes.filter((n) => n.type === "task").map((n) => (n as { cardId: string }).cardId),
+      );
+      const unplaced = realCards.filter((c) => !existingCardIds.has(c.id));
+      if (unplaced.length === 0) return prev;
+      const startX = Math.max(0, ...prev.nodes.map((n) => n.x + n.width)) + 40;
+      const newNodes = unplaced.map((card, i) => ({
+        id: `task-node-${card.id}`,
+        type: "task" as const,
+        cardId: card.id,
+        x: startX,
+        y: i * 160,
+        width: 220,
+        height: 140,
+      }));
+      return { ...prev, nodes: [...prev.nodes, ...newNodes] };
+    });
+  }, [realCards]);
 
-  const handleClearConfirm = () => {
-    if (clearPending === "system") {
-      for (const card of systemCards) {
-        onDeleteCard(card.id);
-      }
-    } else if (clearPending === "all") {
-      for (const card of allCards) {
-        onDeleteCard(card.id);
-      }
-    }
+  const cardMap = useMemo(
+    () => new Map(allCards.map((c) => [c.id, c])),
+    [allCards],
+  );
+
+  const systemCards = useMemo(() => allCards.filter((c) => c.isInferred), [allCards]);
+
+  const filteredCardsByStatus: Record<TaskBoardStatus, TaskBoardCard[]> = useMemo(
+    () =>
+      hideSystemTasks
+        ? (Object.fromEntries(
+            STATUS_ORDER.map((s) => [s, cardsByStatus[s].filter((c) => !c.isInferred)]),
+          ) as Record<TaskBoardStatus, TaskBoardCard[]>)
+        : cardsByStatus,
+    [hideSystemTasks, cardsByStatus],
+  );
+
+  const handleClearConfirm = useCallback(() => {
+    const targets = clearPending === "all" ? allCards : systemCards;
+    for (const card of targets) onDeleteCardAction(card.id);
     setClearPending(null);
-  };
+  }, [clearPending, allCards, systemCards, onDeleteCardAction]);
 
-  const runningJobs = cronJobs.filter((j) => j.state.runningAtMs);
+  const runningJobs = useMemo(() => cronJobs.filter((j) => j.state.runningAtMs), [cronJobs]);
+
+  const tabs: { id: Tab; label: string; badge?: number }[] = [
+    { id: "workspace", label: "Workspace" },
+    { id: "kanban", label: "Kanban", badge: realCards.length },
+    { id: "logs", label: "Logs", badge: logEntries.length > 0 ? logEntries.length : undefined },
+  ];
 
   return (
     <section className="flex h-full min-h-0 flex-col bg-transparent text-white">
@@ -189,75 +246,16 @@ export function TaskBoardView({
             <div className="mt-1 font-mono text-[11px] text-white/40">{subtitle}</div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Filter toggle */}
             <button
               type="button"
-              onClick={() => setHideSystemTasks((v) => !v)}
-              title={hideSystemTasks ? "Show system tasks" : "Hide system tasks"}
-              className="inline-flex items-center gap-1 rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/70 transition-colors hover:border-white/20 hover:text-white"
-            >
-              {hideSystemTasks ? (
-                <EyeOff className="h-3 w-3" />
-              ) : (
-                <Eye className="h-3 w-3" />
-              )}
-              {hideSystemTasks ? `System (${systemCardCount})` : "Hide system"}
-            </button>
-
-            {/* Bulk clear */}
-            {clearPending ? (
-              <div className="flex items-center gap-1">
-                <span className="font-mono text-[10px] text-rose-200/80">
-                  Clear {clearPending === "all" ? "all" : "system"} tasks?
-                </span>
-                <button
-                  type="button"
-                  onClick={handleClearConfirm}
-                  className="rounded border border-rose-500/40 bg-rose-500/15 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-rose-100 hover:border-rose-400/60"
-                >
-                  Confirm
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setClearPending(null)}
-                  className="rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] text-white/50 hover:text-white"
-                >
-                  Cancel
-                </button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1">
-                {systemCardCount > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setClearPending("system")}
-                    className="rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/70 transition-colors hover:border-rose-400/30 hover:text-rose-200"
-                  >
-                    Clear system ({systemCardCount})
-                  </button>
-                )}
-                {allCards.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => setClearPending("all")}
-                    className="rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/70 transition-colors hover:border-rose-400/30 hover:text-rose-200"
-                  >
-                    Clear all
-                  </button>
-                )}
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={onRefreshCronJobs}
+              onClick={onRefreshCronJobsAction}
               className="rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/70 transition-colors hover:border-white/20 hover:text-white"
             >
               {cronLoading ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : "Refresh"}
             </button>
             <button
               type="button"
-              onClick={onCreateCard}
+              onClick={onCreateCardAction}
               className="inline-flex items-center gap-1 rounded border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-100 transition-colors hover:border-cyan-400/50 hover:text-white"
             >
               <Plus className="h-3.5 w-3.5" />
@@ -266,7 +264,30 @@ export function TaskBoardView({
           </div>
         </div>
 
-        {/* Cron job completion alerts */}
+        {/* Tab strip */}
+        <div className="mt-3 flex gap-1">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 rounded-t border-b-2 px-3 py-1.5 font-mono text-[10px] uppercase tracking-[0.14em] transition-colors ${
+                activeTab === tab.id
+                  ? "border-cyan-400/60 text-cyan-200"
+                  : "border-transparent text-white/35 hover:text-white/60"
+              }`}
+            >
+              {tab.label}
+              {tab.badge !== undefined && (
+                <span className="rounded bg-white/10 px-1 py-0.5 text-[9px] text-white/50">
+                  {tab.badge}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Cron alerts */}
         {cronAlerts.map((alert) => (
           <div
             key={`${alert.jobId}-${alert.at}`}
@@ -283,7 +304,8 @@ export function TaskBoardView({
                 <AlertCircle className="h-3.5 w-3.5 shrink-0" />
               )}
               <span>
-                Job &ldquo;{alert.name}&rdquo; {alert.status === "ok" ? "completed." : "failed."}
+                Job &ldquo;{alert.name}&rdquo;{" "}
+                {alert.status === "ok" ? "completed." : "failed."}
               </span>
             </div>
             <button
@@ -372,7 +394,12 @@ export function TaskBoardView({
                           <div>Next: {formatMs(job.state.nextRunAtMs)}</div>
                         ) : null}
                         {job.state.lastRunAtMs ? (
-                          <div>Last: {formatRelativeTime(new Date(job.state.lastRunAtMs).toISOString())}</div>
+                          <div>
+                            Last:{" "}
+                            {formatRelativeTime(
+                              new Date(job.state.lastRunAtMs).toISOString(),
+                            )}
+                          </div>
                         ) : null}
                       </div>
                     </div>
@@ -421,283 +448,417 @@ export function TaskBoardView({
         ) : null}
       </div>
 
-      {/* Board */}
-      <div
-        className={`grid min-h-0 flex-1 overflow-hidden ${selectedCard ? "grid-cols-[minmax(0,1fr)_300px]" : "grid-cols-1"}`}
-      >
-        <div className="min-h-0 overflow-auto px-4 py-4">
-          <div className="grid min-w-[700px] grid-cols-5 gap-3">
-            {STATUS_ORDER.map((status) => {
-              const cards = filteredCardsByStatus[status];
-              return (
-                <div
-                  key={status}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                  }}
-                  onDrop={(event) => {
-                    const cardId = stopAndGetCardId(event);
-                    if (!cardId) return;
-                    onMoveCard(cardId, status);
-                  }}
-                  className="flex min-h-[420px] flex-col rounded-xl border border-white/10 bg-black/14 backdrop-blur-[1px]"
-                >
-                  <div className="border-b border-white/8 px-3 py-3">
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/50">
-                        {STATUS_LABELS[status]}
-                      </div>
-                      <div className="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10px] text-white/60">
-                        {cards.length}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex-1 space-y-2 overflow-y-auto p-3">
-                    {cards.length === 0 ? (
-                      <div className="rounded border border-dashed border-white/10 px-3 py-4 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-white/25">
-                        Drop a card here.
-                      </div>
-                    ) : (
-                      cards.map((card) => (
-                        <button
-                          key={card.id}
-                          type="button"
-                          draggable
-                          aria-label={`${card.title} — ${STATUS_LABELS[card.status]}. Arrow keys to move between columns.`}
-                          onDragStart={(event) => {
-                            event.dataTransfer.setData("text/task-card-id", card.id);
-                            event.dataTransfer.effectAllowed = "move";
-                          }}
-                          onClick={() =>
-                            onSelectCard(selectedCard?.id === card.id ? null : card.id)
-                          }
-                          onKeyDown={(event: ReactKeyboardEvent) => {
-                            const currentIdx = STATUS_ORDER.indexOf(card.status);
-                            if (
-                              event.key === "ArrowRight" &&
-                              currentIdx < STATUS_ORDER.length - 1
-                            ) {
-                              event.preventDefault();
-                              onMoveCard(card.id, STATUS_ORDER[currentIdx + 1]!);
-                            } else if (event.key === "ArrowLeft" && currentIdx > 0) {
-                              event.preventDefault();
-                              onMoveCard(card.id, STATUS_ORDER[currentIdx - 1]!);
-                            }
-                          }}
-                          className={`flex w-full flex-col rounded-lg border px-3 py-3 text-left transition-colors ${
-                            selectedCard?.id === card.id
-                              ? "border-cyan-400/35 bg-cyan-500/[0.10]"
-                              : "border-white/8 bg-black/12 hover:border-cyan-400/20 hover:bg-cyan-500/[0.04]"
-                          }`}
-                        >
-                          <div className="flex items-start justify-between gap-2">
-                            <div className="line-clamp-2 text-sm font-medium text-white/90">
-                              {card.title}
-                            </div>
-                            <span className="rounded border border-white/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/50">
-                              {card.source.replaceAll("_", " ")}
-                            </span>
-                          </div>
-                          {card.description ? (
-                            <div className="mt-2 line-clamp-3 text-[12px] leading-5 text-white/55">
-                              {card.description}
-                            </div>
-                          ) : null}
-                          <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-white/38">
-                            <span>{card.assignedAgentId ?? "Unassigned"}</span>
-                            {card.runId ? <span>Run linked.</span> : null}
-                            {card.playbookJobId ? <span>Playbook linked.</span> : null}
-                          </div>
-                          <div className="mt-2 font-mono text-[10px] text-white/32">
-                            {formatRelativeTime(card.lastActivityAt ?? card.updatedAt)}
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+      {/* Tab content */}
+      <div className="min-h-0 flex-1 overflow-hidden">
+        {/* ── Workspace (JSON Canvas) ── */}
+        {activeTab === "workspace" && (
+          <CanvasBoard
+            canvas={canvas}
+            cardMap={cardMap}
+            onCanvasChangeAction={setCanvas}
+            onMoveCardAction={onMoveCardAction}
+            onCreateCardAction={onCreateCardAction}
+            onSelectCardAction={onSelectCardAction}
+            selectedCardId={selectedCard?.id ?? null}
+          />
+        )}
 
-        {selectedCard ? (
-          <aside className="flex min-h-0 flex-col border-l border-white/8 bg-black/25">
-            <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
-              <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/45">
-                Task Details
-              </div>
-              <button
-                type="button"
-                onClick={() => onSelectCard(null)}
-                className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40 hover:text-white/70"
-              >
-                Close
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
-              <label className="flex flex-col gap-1">
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
-                  Title
-                </span>
-                <input
-                  value={selectedCard.title}
-                  onChange={(event) =>
-                    onUpdateCard(selectedCard.id, { title: event.target.value })
-                  }
-                  className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                />
-              </label>
+        {/* ── Kanban (column view, real tasks only) ── */}
+        {activeTab === "kanban" && (
+          <KanbanTab
+            cardsByStatus={filteredCardsByStatus}
+            selectedCard={selectedCard}
+            allCards={allCards}
+            systemCards={systemCards}
+            agents={agents}
+            activeRuns={activeRuns}
+            cronJobs={cronJobs}
+            hideSystemTasks={hideSystemTasks}
+            clearPending={clearPending}
+            onToggleSystemTasks={() => setHideSystemTasks((v) => !v)}
+            onSetClearPending={setClearPending}
+            onClearConfirm={handleClearConfirm}
+            onMoveCard={onMoveCardAction}
+            onSelectCard={onSelectCardAction}
+            onUpdateCard={onUpdateCardAction}
+            onDeleteCard={onDeleteCardAction}
+          />
+        )}
 
-              <label className="flex flex-col gap-1">
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
-                  Description
-                </span>
-                <textarea
-                  rows={4}
-                  value={selectedCard.description}
-                  onChange={(event) =>
-                    onUpdateCard(selectedCard.id, { description: event.target.value })
-                  }
-                  className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1">
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
-                  Status
-                </span>
-                <select
-                  value={selectedCard.status}
-                  onChange={(event) =>
-                    onMoveCard(selectedCard.id, event.target.value as TaskBoardStatus)
-                  }
-                  className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                >
-                  {STATUS_ORDER.map((status) => (
-                    <option key={status} value={status}>
-                      {STATUS_LABELS[status]}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex flex-col gap-1">
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
-                  Assigned agent
-                </span>
-                <select
-                  value={selectedCard.assignedAgentId ?? ""}
-                  onChange={(event) =>
-                    onUpdateCard(selectedCard.id, {
-                      assignedAgentId: event.target.value || null,
-                    })
-                  }
-                  className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                >
-                  <option value="">Unassigned</option>
-                  {agents.map((agent) => (
-                    <option key={agent.agentId} value={agent.agentId}>
-                      {agent.name || agent.agentId}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex flex-col gap-1">
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
-                  Linked active run
-                </span>
-                <select
-                  value={selectedCard.runId ?? ""}
-                  onChange={(event) =>
-                    onUpdateCard(selectedCard.id, { runId: event.target.value || null })
-                  }
-                  className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                >
-                  <option value="">No linked run</option>
-                  {activeRuns.map((run) => (
-                    <option key={run.runId} value={run.runId}>
-                      {run.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex flex-col gap-1">
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
-                  Linked playbook
-                </span>
-                <select
-                  value={selectedCard.playbookJobId ?? ""}
-                  onChange={(event) =>
-                    onUpdateCard(selectedCard.id, {
-                      playbookJobId: event.target.value || null,
-                    })
-                  }
-                  className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                >
-                  <option value="">No linked playbook</option>
-                  {cronJobs.map((job) => (
-                    <option key={job.id} value={job.id}>
-                      {job.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="flex flex-col gap-1">
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
-                  Channel
-                </span>
-                <input
-                  value={selectedCard.channel ?? ""}
-                  onChange={(event) =>
-                    onUpdateCard(selectedCard.id, {
-                      channel: event.target.value || null,
-                    })
-                  }
-                  className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                />
-              </label>
-
-              <label className="flex flex-col gap-1">
-                <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
-                  Notes
-                </span>
-                <textarea
-                  rows={3}
-                  value={selectedCard.notes.join("\n")}
-                  onChange={(event) =>
-                    onUpdateCard(selectedCard.id, {
-                      notes: event.target.value
-                        .split("\n")
-                        .map((entry) => entry.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                  className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
-                />
-              </label>
-
-              <div className="space-y-2 rounded border border-white/8 bg-white/[0.03] px-3 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-white/38">
-                <div>Source: {selectedCard.source.replaceAll("_", " ")}.</div>
-                <div>Created: {new Date(selectedCard.createdAt).toLocaleString()}.</div>
-                <div>Updated: {new Date(selectedCard.updatedAt).toLocaleString()}.</div>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => onDeleteCard(selectedCard.id)}
-                className="inline-flex items-center gap-2 rounded border border-rose-500/25 bg-rose-500/10 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-rose-100 transition-colors hover:border-rose-400/50 hover:text-white"
-              >
-                <Trash2 className="h-3.5 w-3.5" />
-                Delete Task
-              </button>
-            </div>
-          </aside>
-        ) : null}
+        {/* ── Logs ── */}
+        {activeTab === "logs" && (
+          <AgentLogsPanel entries={logEntries} onClear={onClearLogsAction ?? (() => {})} />
+        )}
       </div>
     </section>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// KanbanTab — extracted so JSX doesn't bloat the main component
+// ---------------------------------------------------------------------------
+function KanbanTab({
+  cardsByStatus,
+  selectedCard,
+  allCards,
+  systemCards,
+  agents,
+  activeRuns,
+  cronJobs,
+  hideSystemTasks,
+  clearPending,
+  onToggleSystemTasks,
+  onSetClearPending,
+  onClearConfirm,
+  onMoveCard,
+  onSelectCard,
+  onUpdateCard,
+  onDeleteCard,
+}: {
+  cardsByStatus: Record<TaskBoardStatus, TaskBoardCard[]>;
+  selectedCard: TaskBoardCard | null;
+  allCards: TaskBoardCard[];
+  systemCards: TaskBoardCard[];
+  agents: AgentState[];
+  activeRuns: Array<{ runId: string; agentId: string; label: string }>;
+  cronJobs: CronJobSummary[];
+  hideSystemTasks: boolean;
+  clearPending: "system" | "all" | null;
+  onToggleSystemTasks: () => void;
+  onSetClearPending: (v: "system" | "all" | null) => void;
+  onClearConfirm: () => void;
+  onMoveCard: (cardId: string, status: TaskBoardStatus) => void;
+  onSelectCard: (cardId: string | null) => void;
+  onUpdateCard: (cardId: string, patch: Partial<TaskBoardCard>) => void;
+  onDeleteCard: (cardId: string) => void;
+}) {
+  return (
+    <div
+      className={`grid h-full min-h-0 overflow-hidden ${selectedCard ? "grid-cols-[minmax(0,1fr)_300px]" : "grid-cols-1"}`}
+    >
+      <div className="min-h-0 overflow-auto px-4 py-4">
+        {/* Bulk controls */}
+        <div className="mb-3 flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onToggleSystemTasks}
+            className="inline-flex items-center gap-1 rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/70 hover:border-white/20 hover:text-white"
+          >
+            {hideSystemTasks ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+            {hideSystemTasks
+              ? `Show system (${systemCards.length})`
+              : "Hide system"}
+          </button>
+          {clearPending ? (
+            <div className="flex items-center gap-1">
+              <span className="font-mono text-[10px] text-rose-200/80">
+                Clear {clearPending === "all" ? "all" : "system"} tasks?
+              </span>
+              <button
+                type="button"
+                onClick={onClearConfirm}
+                className="rounded border border-rose-500/40 bg-rose-500/15 px-2 py-1 font-mono text-[10px] uppercase text-rose-100 hover:border-rose-400/60"
+              >
+                Confirm
+              </button>
+              <button
+                type="button"
+                onClick={() => onSetClearPending(null)}
+                className="rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] text-white/50 hover:text-white"
+              >
+                Cancel
+              </button>
+            </div>
+          ) : (
+            <>
+              {systemCards.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onSetClearPending("system")}
+                  className="rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/70 hover:border-rose-400/30 hover:text-rose-200"
+                >
+                  Clear system ({systemCards.length})
+                </button>
+              )}
+              {allCards.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => onSetClearPending("all")}
+                  className="rounded border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase tracking-[0.14em] text-white/70 hover:border-rose-400/30 hover:text-rose-200"
+                >
+                  Clear all
+                </button>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="grid min-w-[700px] grid-cols-5 gap-3">
+          {STATUS_ORDER.map((status) => {
+            const cards = cardsByStatus[status];
+            return (
+              <div
+                key={status}
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={(event) => {
+                  const cardId = stopAndGetCardId(event);
+                  if (!cardId) return;
+                  onMoveCard(cardId, status);
+                }}
+                className="flex min-h-[420px] flex-col rounded-xl border border-white/10 bg-black/14 backdrop-blur-[1px]"
+              >
+                <div className="border-b border-white/8 px-3 py-3">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/50">
+                      {STATUS_LABELS[status]}
+                    </div>
+                    <div className="rounded bg-white/8 px-1.5 py-0.5 font-mono text-[10px] text-white/60">
+                      {cards.length}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex-1 space-y-2 overflow-y-auto p-3">
+                  {cards.length === 0 ? (
+                    <div className="rounded border border-dashed border-white/10 px-3 py-4 text-center font-mono text-[10px] uppercase tracking-[0.16em] text-white/25">
+                      Drop a card here.
+                    </div>
+                  ) : (
+                    cards.map((card) => (
+                      <button
+                        key={card.id}
+                        type="button"
+                        draggable
+                        aria-label={`${card.title} — ${STATUS_LABELS[card.status]}. Arrow keys to move between columns.`}
+                        onDragStart={(event) => {
+                          event.dataTransfer.setData("text/task-card-id", card.id);
+                          event.dataTransfer.effectAllowed = "move";
+                        }}
+                        onClick={() =>
+                          onSelectCard(selectedCard?.id === card.id ? null : card.id)
+                        }
+                        onKeyDown={(event: ReactKeyboardEvent) => {
+                          const idx = STATUS_ORDER.indexOf(card.status);
+                          if (event.key === "ArrowRight" && idx < STATUS_ORDER.length - 1) {
+                            event.preventDefault();
+                            onMoveCard(card.id, STATUS_ORDER[idx + 1]!);
+                          } else if (event.key === "ArrowLeft" && idx > 0) {
+                            event.preventDefault();
+                            onMoveCard(card.id, STATUS_ORDER[idx - 1]!);
+                          }
+                        }}
+                        className={`flex w-full flex-col rounded-lg border px-3 py-3 text-left transition-colors ${
+                          selectedCard?.id === card.id
+                            ? "border-cyan-400/35 bg-cyan-500/[0.10]"
+                            : "border-white/8 bg-black/12 hover:border-cyan-400/20 hover:bg-cyan-500/[0.04]"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="line-clamp-2 text-sm font-medium text-white/90">
+                            {card.title}
+                          </div>
+                          <span className="rounded border border-white/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/50">
+                            {card.source.replaceAll("_", " ")}
+                          </span>
+                        </div>
+                        {card.description ? (
+                          <div className="mt-2 line-clamp-3 text-[12px] leading-5 text-white/55">
+                            {card.description}
+                          </div>
+                        ) : null}
+                        <div className="mt-3 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.12em] text-white/38">
+                          <span>{card.assignedAgentId ?? "Unassigned"}</span>
+                          {card.runId ? <span>Run linked.</span> : null}
+                          {card.playbookJobId ? <span>Playbook linked.</span> : null}
+                        </div>
+                        <div className="mt-2 font-mono text-[10px] text-white/32">
+                          {formatRelativeTime(card.lastActivityAt ?? card.updatedAt)}
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {selectedCard ? (
+        <aside className="flex min-h-0 flex-col border-l border-white/8 bg-black/25">
+          <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+            <div className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/45">
+              Task Details
+            </div>
+            <button
+              type="button"
+              onClick={() => onSelectCard(null)}
+              className="font-mono text-[10px] uppercase tracking-[0.14em] text-white/40 hover:text-white/70"
+            >
+              Close
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+            <label className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
+                Title
+              </span>
+              <input
+                value={selectedCard.title}
+                onChange={(event) =>
+                  onUpdateCard(selectedCard.id, { title: event.target.value })
+                }
+                className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
+                Description
+              </span>
+              <textarea
+                rows={4}
+                value={selectedCard.description}
+                onChange={(event) =>
+                  onUpdateCard(selectedCard.id, { description: event.target.value })
+                }
+                className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
+                Status
+              </span>
+              <select
+                value={selectedCard.status}
+                onChange={(event) =>
+                  onMoveCard(selectedCard.id, event.target.value as TaskBoardStatus)
+                }
+                className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+              >
+                {STATUS_ORDER.map((status) => (
+                  <option key={status} value={status}>
+                    {STATUS_LABELS[status]}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
+                Assigned agent
+              </span>
+              <select
+                value={selectedCard.assignedAgentId ?? ""}
+                onChange={(event) =>
+                  onUpdateCard(selectedCard.id, {
+                    assignedAgentId: event.target.value || null,
+                  })
+                }
+                className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+              >
+                <option value="">Unassigned</option>
+                {agents.map((agent) => (
+                  <option key={agent.agentId} value={agent.agentId}>
+                    {agent.name || agent.agentId}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
+                Linked active run
+              </span>
+              <select
+                value={selectedCard.runId ?? ""}
+                onChange={(event) =>
+                  onUpdateCard(selectedCard.id, { runId: event.target.value || null })
+                }
+                className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+              >
+                <option value="">No linked run</option>
+                {activeRuns.map((run) => (
+                  <option key={run.runId} value={run.runId}>
+                    {run.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
+                Linked playbook
+              </span>
+              <select
+                value={selectedCard.playbookJobId ?? ""}
+                onChange={(event) =>
+                  onUpdateCard(selectedCard.id, {
+                    playbookJobId: event.target.value || null,
+                  })
+                }
+                className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+              >
+                <option value="">No linked playbook</option>
+                {cronJobs.map((job) => (
+                  <option key={job.id} value={job.id}>
+                    {job.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
+                Channel
+              </span>
+              <input
+                value={selectedCard.channel ?? ""}
+                onChange={(event) =>
+                  onUpdateCard(selectedCard.id, {
+                    channel: event.target.value || null,
+                  })
+                }
+                className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+              />
+            </label>
+
+            <label className="flex flex-col gap-1">
+              <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-white/35">
+                Notes
+              </span>
+              <textarea
+                rows={3}
+                value={selectedCard.notes.join("\n")}
+                onChange={(event) =>
+                  onUpdateCard(selectedCard.id, {
+                    notes: event.target.value
+                      .split("\n")
+                      .map((entry) => entry.trim())
+                      .filter(Boolean),
+                  })
+                }
+                className="rounded border border-white/10 bg-black/40 px-3 py-2 text-sm text-white outline-none"
+              />
+            </label>
+
+            <div className="space-y-2 rounded border border-white/8 bg-white/[0.03] px-3 py-3 font-mono text-[10px] uppercase tracking-[0.14em] text-white/38">
+              <div>Source: {selectedCard.source.replaceAll("_", " ")}.</div>
+              <div>Created: {new Date(selectedCard.createdAt).toLocaleString()}.</div>
+              <div>Updated: {new Date(selectedCard.updatedAt).toLocaleString()}.</div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => onDeleteCard(selectedCard.id)}
+              className="inline-flex items-center gap-2 rounded border border-rose-500/25 bg-rose-500/10 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.16em] text-rose-100 transition-colors hover:border-rose-400/50 hover:text-white"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              Delete Task
+            </button>
+          </div>
+        </aside>
+      ) : null}
+    </div>
   );
 }
