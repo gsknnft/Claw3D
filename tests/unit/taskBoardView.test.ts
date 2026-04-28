@@ -112,9 +112,11 @@ describe("TaskBoardView", () => {
       })
     );
 
-    fireEvent.click(screen.getAllByRole("button", { name: /new task/i })[0]!);
+    fireEvent.click(screen.getByRole("button", { name: /new task/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^\+ task$/i }));
     fireEvent.click(screen.getByRole("button", { name: /refresh/i }));
-    fireEvent.click(screen.getAllByRole("button", { name: /new task/i })[1]!);
+    fireEvent.click(screen.getByRole("button", { name: /^kanban/i }));
+    fireEvent.click(screen.getByRole("button", { name: /^close$/i }));
     fireEvent.change(screen.getByLabelText("Title"), {
       target: { value: "Create marketing website" },
     });
@@ -126,7 +128,7 @@ describe("TaskBoardView", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: /delete task/i }));
 
-    expect(onCreateCard).toHaveBeenCalledTimes(1);
+    expect(onCreateCard).toHaveBeenCalledTimes(2);
     expect(onRefreshCronJobs).toHaveBeenCalledTimes(1);
     expect(onSelectCard).toHaveBeenCalledWith(null);
     expect(onUpdateCard).toHaveBeenCalledWith("task-1", { title: "Create marketing website" });

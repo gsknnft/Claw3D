@@ -29,7 +29,11 @@ import type { CronJobSummary } from "@/lib/cron/types";
 import { formatCronSchedule } from "@/lib/cron/types";
 import type { TaskBoardCard, TaskBoardStatus } from "@/features/office/tasks/types";
 import { AgentLogsPanel, type AgentLogEntry } from "@/features/office/tasks/AgentLogsPanel";
-import { CanvasBoard, type JsonCanvas } from "@/features/office/tasks/CanvasBoard";
+import {
+  CanvasBoard,
+  type CanvasNode,
+  type JsonCanvas,
+} from "@/features/office/tasks/CanvasBoard";
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -191,7 +195,6 @@ export function TaskBoardView({
     }
   }, [cronJobs]);
 
-  // Sync canvas nodes when new real tasks arrive that aren't on canvas yet
   const allCards = useMemo(
     () => STATUS_ORDER.flatMap((s) => cardsByStatus[s]),
     [cardsByStatus],
@@ -200,13 +203,22 @@ export function TaskBoardView({
 
   useEffect(() => {
     setCanvas((prev) => {
+      const validCardIds = new Set(realCards.map((card) => card.id));
+      const removedNodeIds = new Set(
+        prev.nodes
+          .filter((node) => node.type === "task" && !validCardIds.has(node.cardId))
+          .map((node) => node.id),
+      );
+      const retainedNodes = prev.nodes.filter((node) => !removedNodeIds.has(node.id));
       const existingCardIds = new Set(
-        prev.nodes.filter((n) => n.type === "task").map((n) => (n as { cardId: string }).cardId),
+        retainedNodes
+          .filter((node) => node.type === "task")
+          .map((node) => node.cardId),
       );
       const unplaced = realCards.filter((c) => !existingCardIds.has(c.id));
-      if (unplaced.length === 0) return prev;
-      const startX = Math.max(0, ...prev.nodes.map((n) => n.x + n.width)) + 40;
-      const newNodes = unplaced.map((card, i) => ({
+      if (removedNodeIds.size === 0 && unplaced.length === 0) return prev;
+      const startX = Math.max(0, ...retainedNodes.map((node) => node.x + node.width)) + 40;
+      const newNodes: CanvasNode[] = unplaced.map((card, i) => ({
         id: `task-node-${card.id}`,
         type: "task" as const,
         cardId: card.id,
@@ -215,7 +227,13 @@ export function TaskBoardView({
         width: 220,
         height: 140,
       }));
-      return { ...prev, nodes: [...prev.nodes, ...newNodes] };
+      return {
+        ...prev,
+        nodes: [...retainedNodes, ...newNodes],
+        edges: prev.edges.filter(
+          (edge) => !removedNodeIds.has(edge.fromNode) && !removedNodeIds.has(edge.toNode),
+        ),
+      };
     });
   }, [realCards]);
 

@@ -23,14 +23,17 @@ type CustomRuntimeProxyInput = {
   timeoutMs?: number;
 };
 
-const DEFAULT_CUSTOM_RUNTIME_TIMEOUT_MS = 6_000;
-
 const createTimeoutSignal = (
   signal: AbortSignal | undefined,
-  timeoutMs: number
-): { signal: AbortSignal; cleanup: () => void } => {
+  timeoutMs: number | undefined
+): { signal: AbortSignal | undefined; cleanup: () => void; timedOut: () => boolean } => {
+  if (!timeoutMs) {
+    return { signal, cleanup: () => {}, timedOut: () => false };
+  }
   const controller = new AbortController();
+  let didTimeout = false;
   const timeoutId = window.setTimeout(() => {
+    didTimeout = true;
     controller.abort(new DOMException("Custom runtime request timed out.", "TimeoutError"));
   }, timeoutMs);
   const abortFromParent = () => {
@@ -49,6 +52,7 @@ const createTimeoutSignal = (
       window.clearTimeout(timeoutId);
       signal?.removeEventListener("abort", abortFromParent);
     },
+    timedOut: () => didTimeout,
   };
 };
 
@@ -58,7 +62,7 @@ export async function requestCustomRuntime<T = unknown>({
   method = "GET",
   body,
   signal,
-  timeoutMs = DEFAULT_CUSTOM_RUNTIME_TIMEOUT_MS,
+  timeoutMs,
 }: CustomRuntimeProxyInput): Promise<T> {
   const normalizedRuntimeUrl = normalizeCustomBaseUrl(runtimeUrl);
   if (!normalizedRuntimeUrl) {
@@ -83,7 +87,11 @@ export async function requestCustomRuntime<T = unknown>({
       }),
     });
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") {
+    if (
+      timeout.timedOut() &&
+      error instanceof DOMException &&
+      (error.name === "AbortError" || error.name === "TimeoutError")
+    ) {
       throw new Error("Custom runtime request timed out.");
     }
     throw error;
