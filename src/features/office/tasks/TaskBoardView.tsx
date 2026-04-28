@@ -186,13 +186,19 @@ export function TaskBoardView({
       }
     }
     prevRunningRef.current = next;
-    if (newAlerts.length > 0) {
+    if (newAlerts.length === 0) return;
+    let dismissTimer: number | null = null;
+    const addTimer = window.setTimeout(() => {
       setCronAlerts((prev) => [...prev, ...newAlerts]);
       const ids = newAlerts.map((a) => a.jobId);
-      setTimeout(() => {
+      dismissTimer = window.setTimeout(() => {
         setCronAlerts((prev) => prev.filter((a) => !ids.includes(a.jobId)));
       }, 30_000);
-    }
+    }, 0);
+    return () => {
+      window.clearTimeout(addTimer);
+      if (dismissTimer !== null) window.clearTimeout(dismissTimer);
+    };
   }, [cronJobs]);
 
   const allCards = useMemo(
@@ -202,7 +208,7 @@ export function TaskBoardView({
   const realCards = useMemo(() => allCards.filter((c) => !c.isInferred), [allCards]);
 
   useEffect(() => {
-    setCanvas((prev) => {
+    const syncTimer = window.setTimeout(() => setCanvas((prev) => {
       const validCardIds = new Set(realCards.map((card) => card.id));
       const removedNodeIds = new Set(
         prev.nodes
@@ -234,7 +240,8 @@ export function TaskBoardView({
           (edge) => !removedNodeIds.has(edge.fromNode) && !removedNodeIds.has(edge.toNode),
         ),
       };
-    });
+    }), 0);
+    return () => window.clearTimeout(syncTimer);
   }, [realCards]);
 
   const cardMap = useMemo(

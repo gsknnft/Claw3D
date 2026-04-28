@@ -144,7 +144,6 @@ function TaskNodeCard({
   node, card, selected,
   onSelect, onDragStart, onStatusChange, onStartEdge,
   onResizeStart,
-  onResize,
   drawingEdge,
 }: {
   node: CanvasTaskNode;
@@ -156,7 +155,6 @@ function TaskNodeCard({
   onStatusChange: (cardId: string, status: TaskBoardStatus) => void;
   onStartEdge: (nodeId: string) => void;
   onResizeStart: (e: ReactPointerEvent, nodeId: string) => void;
-  onResize: (nodeId: string, width: number, height: number) => void;
 }) {
   const statusClass = STATUS_NODE_COLOR[card.status];
   return (
@@ -879,7 +877,6 @@ export function CanvasBoard({
                   onStatusChange={onMoveCardAction}
                   onStartEdge={handleStartEdge}
                   onResizeStart={onNodeResizeStart}
-                  onResize={handleNodeResize}
                 />
               );
             }
