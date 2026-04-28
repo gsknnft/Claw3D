@@ -92,6 +92,14 @@ export type TaskBoardViewProps = {
   cronError: string | null;
   /** Gateway event log entries — passed from OfficeScreen */
   logEntries?: AgentLogEntry[];
+  taskManagerReady?: boolean;
+  taskManagerInstalling?: boolean;
+  taskManagerInstallProgressPercent?: number;
+  taskManagerInstallProgressMessage?: string | null;
+  taskManagerInstallError?: string | null;
+  taskManagerInstallAvailable?: boolean;
+  taskManagerInstallUnavailableReason?: string | null;
+  onInstallTaskManagerAction?: () => void;
   onClearLogsAction?: () => void;
   taskCaptureDebug?: {
     lastStatus: "idle" | "detected" | "persisted" | "failed" | "unsupported";
@@ -129,6 +137,14 @@ export function TaskBoardView({
   cronLoading,
   cronError,
   logEntries = [],
+  taskManagerReady = false,
+  taskManagerInstalling = false,
+  taskManagerInstallProgressPercent = 0,
+  taskManagerInstallProgressMessage = null,
+  taskManagerInstallError = null,
+  taskManagerInstallAvailable = true,
+  taskManagerInstallUnavailableReason = null,
+  onInstallTaskManagerAction,
   onClearLogsAction,
   taskCaptureDebug,
   onCreateCardAction,
@@ -323,6 +339,66 @@ export function TaskBoardView({
         {cronError ? (
           <div className="mt-2 rounded border border-rose-500/30 bg-rose-500/10 px-3 py-2 font-mono text-[11px] text-rose-100">
             {cronError}
+          </div>
+        ) : null}
+
+        {!taskManagerReady ? (
+          <div className="mt-2 rounded border border-cyan-500/20 bg-cyan-500/8 px-3 py-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-200/80">
+                  Agent task automation
+                </div>
+                <div className="mt-1 text-sm text-cyan-50">
+                  The board and logs are live.{" "}
+                  {taskManagerInstallAvailable ? "Install" : "Enable a skills-capable runtime to install"}{" "}
+                  <span className="font-semibold text-cyan-300">TASK-MANAGER</span> to let
+                  agents create, update, review, and complete tasks themselves.
+                </div>
+                {!taskManagerInstallAvailable && taskManagerInstallUnavailableReason ? (
+                  <div className="mt-2 font-mono text-[11px] text-cyan-100/70">
+                    {taskManagerInstallUnavailableReason}
+                  </div>
+                ) : null}
+                {taskManagerInstalling ? (
+                  <div className="mt-2">
+                    <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-100/70">
+                      <span>{taskManagerInstallProgressMessage?.trim() || "Installing"}</span>
+                      <span>{Math.max(0, Math.min(100, Math.round(taskManagerInstallProgressPercent)))}%</span>
+                    </div>
+                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800/90">
+                      <div
+                        className="h-full rounded-full bg-cyan-400 transition-[width] duration-500 ease-out"
+                        style={{
+                          width: `${Math.max(6, Math.min(100, taskManagerInstallProgressPercent))}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+                ) : null}
+                {taskManagerInstallError ? (
+                  <div className="mt-2 rounded border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-sm text-rose-200">
+                    {taskManagerInstallError}
+                  </div>
+                ) : null}
+              </div>
+              <div className="shrink-0">
+                {taskManagerInstallAvailable ? (
+                  <button
+                    type="button"
+                    onClick={() => onInstallTaskManagerAction?.()}
+                    disabled={taskManagerInstalling || !onInstallTaskManagerAction}
+                    className="rounded border border-cyan-500/25 bg-cyan-500/12 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-100 transition-colors hover:border-cyan-400/50 hover:text-white disabled:opacity-60"
+                  >
+                    {taskManagerInstalling ? "Installing..." : "Install TASK-MANAGER"}
+                  </button>
+                ) : (
+                  <div className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/55">
+                    Skill install unavailable
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         ) : null}
 
@@ -607,7 +683,7 @@ function KanbanTab({
                   if (!cardId) return;
                   onMoveCard(cardId, status);
                 }}
-                className="flex min-h-[420px] flex-col rounded-xl border border-white/10 bg-black/14 backdrop-blur-[1px]"
+                className="flex min-h-[540px] flex-col rounded-xl border border-white/10 bg-black/14 backdrop-blur-[1px]"
               >
                 <div className="border-b border-white/8 px-3 py-3">
                   <div className="flex items-center justify-between gap-2">
@@ -648,22 +724,22 @@ function KanbanTab({
                             onMoveCard(card.id, STATUS_ORDER[idx - 1]!);
                           }
                         }}
-                        className={`flex w-full flex-col rounded-lg border px-3 py-3 text-left transition-colors ${
+                        className={`flex w-full flex-col rounded-lg border px-4 py-4 text-left transition-colors ${
                           selectedCard?.id === card.id
                             ? "border-cyan-400/35 bg-cyan-500/[0.10]"
                             : "border-white/8 bg-black/12 hover:border-cyan-400/20 hover:bg-cyan-500/[0.04]"
                         }`}
                       >
                         <div className="flex items-start justify-between gap-2">
-                          <div className="line-clamp-2 text-sm font-medium text-white/90">
+                          <div className="line-clamp-3 text-[13px] font-semibold leading-snug text-white/90">
                             {card.title}
                           </div>
-                          <span className="rounded border border-white/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/50">
+                          <span className="shrink-0 rounded border border-white/10 px-1.5 py-0.5 font-mono text-[9px] uppercase tracking-[0.14em] text-white/50">
                             {card.source.replaceAll("_", " ")}
                           </span>
                         </div>
                         {card.description ? (
-                          <div className="mt-2 line-clamp-3 text-[12px] leading-5 text-white/55">
+                          <div className="mt-2 line-clamp-4 text-[12px] leading-[1.6] text-white/55">
                             {card.description}
                           </div>
                         ) : null}

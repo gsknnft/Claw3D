@@ -84,7 +84,7 @@ export function KanbanImmersiveScreen({
       role="dialog"
       aria-modal="true"
       aria-label="Kanban Board"
-      className="fixed inset-0 z-50 flex items-center justify-center"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-[2px]"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -102,7 +102,7 @@ export function KanbanImmersiveScreen({
         <div
           ref={dialogRef}
           tabIndex={-1}
-          className="flex h-[min(75vh,800px)] w-[min(80vw,1280px)] flex-col overflow-hidden rounded-2xl border border-amber-500/20 bg-[#0e0b07]/85 shadow-2xl outline-none backdrop-blur-md"
+          className="flex h-[min(90vh,960px)] w-[min(94vw,1500px)] flex-col overflow-hidden rounded-2xl border border-amber-500/20 bg-[#0e0b07]/85 shadow-2xl outline-none backdrop-blur-md"
         >
           <div className="min-h-0 flex-1">
           <TaskBoardView

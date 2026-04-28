@@ -90,8 +90,8 @@ const AGENT_STATUS_DOT: Record<string, string> = {
 const MIN_ZOOM   = 0.2;
 const MAX_ZOOM   = 2;
 const ZOOM_STEP  = 0.15;
-const DEFAULT_NODE_W = 220;
-const DEFAULT_NODE_H = 120;
+const DEFAULT_NODE_W = 280;
+const DEFAULT_NODE_H = 160;
 const AGENT_NODE_W   = 180;
 const AGENT_NODE_H   = 80;
 
@@ -143,6 +143,8 @@ function edgeLabel(fromNode: CanvasNode, toNode: CanvasNode): string | undefined
 function TaskNodeCard({
   node, card, selected,
   onSelect, onDragStart, onStatusChange, onStartEdge,
+  onResizeStart,
+  onResize,
   drawingEdge,
 }: {
   node: CanvasTaskNode;
@@ -153,12 +155,23 @@ function TaskNodeCard({
   onDragStart: (e: ReactPointerEvent, nodeId: string) => void;
   onStatusChange: (cardId: string, status: TaskBoardStatus) => void;
   onStartEdge: (nodeId: string) => void;
+  onResizeStart: (e: ReactPointerEvent, nodeId: string) => void;
+  onResize: (nodeId: string, width: number, height: number) => void;
 }) {
   const statusClass = STATUS_NODE_COLOR[card.status];
   return (
     <div
-      style={{ position: "absolute", left: node.x, top: node.y, width: node.width, height: node.height, minHeight: node.height }}
+      style={{
+        position: "absolute",
+        left: node.x,
+        top: node.y,
+        width: Math.max(DEFAULT_NODE_W, node.width),
+        height: Math.max(DEFAULT_NODE_H, node.height),
+        minWidth: DEFAULT_NODE_W,
+        minHeight: DEFAULT_NODE_H,
+      }}
       className={`flex flex-col overflow-hidden rounded-xl border transition-shadow ${statusClass} ${selected ? "ring-1 ring-cyan-400/50 shadow-lg shadow-cyan-500/10" : ""} ${drawingEdge ? "cursor-crosshair" : ""}`}
+      data-node-id={node.id}
       onPointerDown={(e) => {
         e.stopPropagation();
         if (drawingEdge) { onStartEdge(node.id); return; }
@@ -167,17 +180,17 @@ function TaskNodeCard({
       }}
     >
       <div className="flex cursor-grab items-center justify-between gap-2 border-b border-white/8 px-3 py-2 active:cursor-grabbing">
-        <span className="truncate text-[11px] font-medium text-white/85">{card.title}</span>
-        <span className="shrink-0 rounded bg-white/8 px-1.5 py-0.5 font-mono text-[8px] uppercase text-white/40">
+        <span className="truncate text-[12px] font-semibold text-white/95">{card.title}</span>
+        <span className="shrink-0 rounded bg-black/20 px-1.5 py-0.5 font-mono text-[8px] uppercase text-white/65">
           {STATUS_LABELS[card.status]}
         </span>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 py-2">
         {card.description ? (
-          <p className="line-clamp-2 text-[10px] leading-relaxed text-white/50">{card.description}</p>
+          <p className="line-clamp-4 text-[11px] leading-relaxed text-white/72">{card.description}</p>
         ) : null}
         {card.assignedAgentId ? (
-          <span className="font-mono text-[9px] text-cyan-300/50">{card.assignedAgentId}</span>
+          <span className="font-mono text-[9px] text-cyan-200/75">{card.assignedAgentId}</span>
         ) : null}
       </div>
       <div className="border-t border-white/6 px-2 py-1.5">
@@ -185,13 +198,23 @@ function TaskNodeCard({
           value={card.status}
           onChange={(e) => { e.stopPropagation(); onStatusChange(card.id, e.target.value as TaskBoardStatus); }}
           onPointerDown={(e) => e.stopPropagation()}
-          className="w-full rounded bg-black/20 px-1 py-0.5 font-mono text-[9px] text-white/50 outline-none"
+          className="w-full rounded bg-black/20 px-1 py-0.5 font-mono text-[9px] text-white/75 outline-none"
         >
           {(Object.keys(STATUS_LABELS) as TaskBoardStatus[]).map((s) => (
             <option key={s} value={s}>{STATUS_LABELS[s]}</option>
           ))}
         </select>
       </div>
+      {!drawingEdge ? (
+        <button
+          type="button"
+          aria-label="Resize task card"
+          onPointerDown={(e) => onResizeStart(e, node.id)}
+          className="absolute bottom-1 right-1 h-4 w-4 cursor-se-resize rounded-sm border border-white/10 bg-black/25 text-white/35 hover:text-white/70"
+        >
+          <span className="pointer-events-none absolute bottom-[1px] right-[2px] text-[10px] leading-none">⌟</span>
+        </button>
+      ) : null}
     </div>
   );
 }
@@ -435,6 +458,8 @@ export function CanvasBoard({
   const panStart        = useRef({ x: 0, y: 0 });
   const draggingNodeId  = useRef<string | null>(null);
   const dragStart       = useRef({ mx: 0, my: 0, nx: 0, ny: 0 });
+  const resizingNodeId  = useRef<string | null>(null);
+  const resizeStart     = useRef({ mx: 0, my: 0, width: 0, height: 0 });
 
   // Agent map for quick lookup
   const agentMap = useMemo(() => new Map(agents.map((a) => [a.agentId, a])), [agents]);
@@ -498,6 +523,21 @@ export function CanvasBoard({
     return { x: node.x + node.width / 2, y: node.y + node.height / 2 };
   }, [canvas.nodes]);
 
+  const handleNodeResize = useCallback((nodeId: string, width: number, height: number) => {
+    onCanvasChangeAction({
+      ...canvas,
+      nodes: canvas.nodes.map((node) =>
+        node.id === nodeId
+          ? {
+              ...node,
+              width: Math.max(DEFAULT_NODE_W, width),
+              height: Math.max(DEFAULT_NODE_H, height),
+            }
+          : node,
+      ),
+    });
+  }, [canvas, onCanvasChangeAction]);
+
   // ── Pointer handlers ────────────────────────────────────────────────────
   const onViewportPointerDown = useCallback((e: ReactPointerEvent) => {
     if (e.button !== 0) return;
@@ -534,13 +574,24 @@ export function CanvasBoard({
       });
       return;
     }
+    if (resizingNodeId.current) {
+      const dx = (e.clientX - resizeStart.current.mx) / zoom;
+      const dy = (e.clientY - resizeStart.current.my) / zoom;
+      handleNodeResize(
+        resizingNodeId.current,
+        Math.round(resizeStart.current.width + dx),
+        Math.round(resizeStart.current.height + dy),
+      );
+      return;
+    }
     if (!isPanning.current) return;
     setPan({ x: e.clientX - panStart.current.x, y: e.clientY - panStart.current.y });
-  }, [canvas, onCanvasChangeAction, zoom, edgeFromNodeId, fromNodeCenter, toCanvasCoords]);
+  }, [canvas, handleNodeResize, onCanvasChangeAction, zoom, edgeFromNodeId, fromNodeCenter, toCanvasCoords]);
 
   const onViewportPointerUp = useCallback(() => {
     isPanning.current    = false;
     draggingNodeId.current = null;
+    resizingNodeId.current = null;
   }, []);
 
   const onNodeDragStart = useCallback((e: ReactPointerEvent, nodeId: string) => {
@@ -551,10 +602,26 @@ export function CanvasBoard({
     dragStart.current = { mx: e.clientX, my: e.clientY, nx: node.x, ny: node.y };
   }, [canvas.nodes]);
 
+  const onNodeResizeStart = useCallback((e: ReactPointerEvent, nodeId: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    resizingNodeId.current = nodeId;
+    draggingNodeId.current = null;
+    isPanning.current = false;
+    const node = canvas.nodes.find((currentNode) => currentNode.id === nodeId);
+    if (!node) return;
+    resizeStart.current = {
+      mx: e.clientX,
+      my: e.clientY,
+      width: Math.max(DEFAULT_NODE_W, node.width),
+      height: Math.max(DEFAULT_NODE_H, node.height),
+    };
+  }, [canvas.nodes]);
+
   // ── Edge drawing ────────────────────────────────────────────────────────
   const handleStartEdge = useCallback((nodeId: string) => {
-    if (edgeFromNodeId === null) {
-      // First click: begin drawing
+    if (edgeFromNodeId === null || edgeFromNodeId === "__armed__") {
+      // First click (or toolbar armed the mode): begin drawing from this node
       setEdgeFromNodeId(nodeId);
       const center = fromNodeCenter(nodeId);
       setDraftLine({ x1: center.x, y1: center.y, x2: center.x, y2: center.y });
@@ -811,6 +878,8 @@ export function CanvasBoard({
                   onDragStart={onNodeDragStart}
                   onStatusChange={onMoveCardAction}
                   onStartEdge={handleStartEdge}
+                  onResizeStart={onNodeResizeStart}
+                  onResize={handleNodeResize}
                 />
               );
             }

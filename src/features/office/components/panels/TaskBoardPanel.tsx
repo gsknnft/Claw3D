@@ -17,6 +17,14 @@ export function TaskBoardPanel({
   cronError,
   taskCaptureDebug,
   logEntries,
+  taskManagerReady = false,
+  taskManagerInstalling = false,
+  taskManagerInstallProgressPercent = 0,
+  taskManagerInstallProgressMessage = null,
+  taskManagerInstallError = null,
+  taskManagerInstallAvailable = true,
+  taskManagerInstallUnavailableReason = null,
+  onInstallTaskManagerAction,
   onCreateCardAction,
   onMoveCardAction,
   onSelectCardAction,
@@ -34,6 +42,14 @@ export function TaskBoardPanel({
   cronError: string | null;
   taskCaptureDebug?: ComponentProps<typeof TaskBoardView>["taskCaptureDebug"];
   logEntries?: AgentLogEntry[];
+  taskManagerReady?: boolean;
+  taskManagerInstalling?: boolean;
+  taskManagerInstallProgressPercent?: number;
+  taskManagerInstallProgressMessage?: string | null;
+  taskManagerInstallError?: string | null;
+  taskManagerInstallAvailable?: boolean;
+  taskManagerInstallUnavailableReason?: string | null;
+  onInstallTaskManagerAction?: () => void;
   onCreateCardAction: () => void;
   onMoveCardAction: (cardId: string, status: TaskBoardStatus) => void;
   onSelectCardAction: (cardId: string | null) => void;
@@ -55,6 +71,14 @@ export function TaskBoardPanel({
       cronError={cronError}
       taskCaptureDebug={taskCaptureDebug}
       logEntries={logEntries}
+      taskManagerReady={taskManagerReady}
+      taskManagerInstalling={taskManagerInstalling}
+      taskManagerInstallProgressPercent={taskManagerInstallProgressPercent}
+      taskManagerInstallProgressMessage={taskManagerInstallProgressMessage}
+      taskManagerInstallError={taskManagerInstallError}
+      taskManagerInstallAvailable={taskManagerInstallAvailable}
+      taskManagerInstallUnavailableReason={taskManagerInstallUnavailableReason}
+      onInstallTaskManagerAction={onInstallTaskManagerAction}
       onCreateCardAction={onCreateCardAction}
       onMoveCardAction={onMoveCardAction}
       onSelectCardAction={onSelectCardAction}

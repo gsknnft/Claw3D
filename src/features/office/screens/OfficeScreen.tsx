@@ -1433,7 +1433,9 @@ export function OfficeScreen({
     voiceId: voiceRepliesPreference.voiceId,
     speed: voiceRepliesPreference.speed,
   });
-  const showOnboardingWizard = showOnboarding || forceShowOnboarding;
+  const showOnboardingWizard =
+    forceShowOnboarding ||
+    (showOnboarding && !activeFloorIsDemo && state.agents.length === 0);
   const handleOpenOnboarding = useCallback(() => {
     resetOnboarding();
     setCompanyCreatedSignal(0);
@@ -4822,7 +4824,13 @@ export function OfficeScreen({
               showApprovalHint={didAttemptGatewayConnect}
               onGatewayUrlChange={setGatewayUrl}
               onTokenChange={setToken}
-              onAdapterTypeChange={setSelectedAdapterType}
+              onAdapterTypeChange={(adapterType) => {
+                setSelectedAdapterType(adapterType);
+                if (adapterType === "demo") {
+                  setActiveFloorId("lobby");
+                  settingsCoordinator.schedulePatch({ activeFloorId: "lobby" }, 0);
+                }
+              }}
               onUseLocalDefaults={useLocalGatewayDefaults}
               onConnect={() => void connect()}
             />
@@ -4958,7 +4966,8 @@ export function OfficeScreen({
             setJukeboxOpen(true);
           }}
           onKanbanInteract={() => {
-            setKanbanInstallPromptOpen(true);
+            setActiveSidebarTab("kanban");
+            setSidebarOpen(true);
           }}
           taskBoardAgents={state.agents}
           taskBoardCardsByStatus={taskBoard.cardsByStatus}
@@ -5170,6 +5179,70 @@ export function OfficeScreen({
               }
               taskCaptureDebug={showOpenClawConsole ? taskBoard.taskCaptureDebug : undefined}
               logEntries={showOpenClawConsole ? openClawLogEntries : undefined}
+              taskManagerReady={taskManagerReady}
+              taskManagerInstalling={kanbanInstallProgress.active}
+              taskManagerInstallProgressPercent={kanbanInstallProgress.percent}
+              taskManagerInstallProgressMessage={kanbanInstallProgress.message}
+              taskManagerInstallError={kanbanInstallProgress.error}
+              taskManagerInstallAvailable={runtimeSupportsSkills && status === "connected"}
+              taskManagerInstallUnavailableReason={
+                status !== "connected"
+                  ? "Connect to a runtime before installing TASK-MANAGER."
+                  : selectedAdapterType === "demo" || activeFloorIsDemo
+                    ? "Demo seeds local agents, but the demo runtime does not implement skill installation."
+                  : runtimeSupportsSkills
+                    ? null
+                    : "The current runtime does not expose skill installs."
+              }
+              onInstallTaskManagerAction={() => {
+                const targetAgentId =
+                  (selectedChatAgentId ?? state.selectedAgentId ?? state.agents[0]?.agentId ?? "")
+                    .trim() || null;
+                setKanbanInstallProgress({
+                  active: true,
+                  percent: 8,
+                  message: "Starting task-manager installation.",
+                  error: null,
+                });
+                void (async () => {
+                  try {
+                    await marketplace.handleInstallPackagedSkillAndEnable({
+                      skillKey: "task-manager",
+                      agentId: targetAgentId,
+                      onProgress: ({ percent, message }) => {
+                        setKanbanInstallProgress({
+                          active: true,
+                          percent,
+                          message,
+                          error: null,
+                        });
+                      },
+                    });
+                    setKanbanInstallProgress({
+                      active: true,
+                      percent: 100,
+                      message: "Refreshing task-manager state in Claw3D.",
+                      error: null,
+                    });
+                    setKanbanInstallPromptOpen(false);
+                    setKanbanInstallProgress({
+                      active: false,
+                      percent: 0,
+                      message: "",
+                      error: null,
+                    });
+                  } catch (error) {
+                    setKanbanInstallProgress((current) => ({
+                      ...current,
+                      active: false,
+                      error:
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to install task-manager.",
+                    }));
+                  }
+                })();
+              }}
               onCreateCardAction={() => {
                 taskBoard.createManualCard();
                 setActiveSidebarTab("kanban");
