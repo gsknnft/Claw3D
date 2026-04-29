@@ -94,4 +94,4 @@ test-results
 # mobile — local build artifacts (Capacitor syncs these from npm install)
 mobile/node_modules/
 mobile/package-lock.json
-mobile/.gradle/
+mobile/android/.gradle/
