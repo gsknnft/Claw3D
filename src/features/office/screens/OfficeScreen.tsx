@@ -1233,7 +1233,18 @@ export function OfficeScreen({
       try {
         const settings = await settingsCoordinator.loadSettings({ maxAgeMs: 30_000 });
         if (!settings || cancelled) return;
-        setActiveFloorId(resolveStudioActiveFloorId(settings));
+        const resolvedFloorId = resolveStudioActiveFloorId(settings);
+        const resolvedFloor = getOfficeFloor(resolvedFloorId);
+        // The Lobby is the neutral unconnected state.  A stale persisted runtime
+        // floor should not force OpenClaw/Hermes to render on boot before the
+        // gateway has actually connected; successful real connections still
+        // auto-navigate to their runtime floor in the connected effect below.
+        if (resolvedFloor.kind === "runtime") {
+          setActiveFloorId("lobby");
+          settingsCoordinator.schedulePatch({ activeFloorId: "lobby" }, 0);
+          return;
+        }
+        setActiveFloorId(resolvedFloorId);
       } catch (error) {
         if (!cancelled) {
           console.error("Failed to load active floor preference.", error);

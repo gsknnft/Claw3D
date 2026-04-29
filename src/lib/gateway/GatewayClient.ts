@@ -673,19 +673,6 @@ const isNonRetryableConnectErrorCode = (code: string | null): boolean => {
 const WS_CLOSE_POLICY_VIOLATION = 1008;
 const RATE_LIMIT_RETRY_DELAY_MS = 15_000;
 
-const normalizeGatewayProfilesForComparison = (
-  profiles?: Partial<Record<StudioGatewayAdapterType, { url?: string; token?: string }>>,
-) =>
-  Object.fromEntries(
-    Object.entries(profiles ?? {}).map(([adapterType, profile]) => [
-      adapterType,
-      {
-        url: profile?.url?.trim() ?? "",
-        token: profile?.token?.trim() ?? "",
-      },
-    ]),
-  );
-
 export const resolveGatewayAutoRetryDelayMs = (params: {
   status: GatewayStatus;
   didAutoConnect: boolean;
@@ -1119,13 +1106,11 @@ export const useGatewayConnection = (
         token: persistToken,
       },
     };
-    const baselineProfiles = normalizeGatewayProfilesForComparison(baseline.profiles);
-    const comparableNextProfiles = normalizeGatewayProfilesForComparison(nextProfiles);
     if (
       nextGatewayUrl === baseline.gatewayUrl &&
-      (token || "") === (baseline.token || "") &&
+      token === baseline.token &&
       selectedAdapterType === baseline.adapterType &&
-      JSON.stringify(comparableNextProfiles) === JSON.stringify(baselineProfiles)
+      JSON.stringify(nextProfiles) === JSON.stringify(baseline.profiles ?? {})
     ) {
       return;
     }

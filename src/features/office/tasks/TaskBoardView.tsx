@@ -368,62 +368,35 @@ export function TaskBoardView({
         ) : null}
 
         {!taskManagerReady ? (
-          <div className="mt-2 rounded border border-cyan-500/20 bg-cyan-500/8 px-3 py-3">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-200/80">
-                  Agent task automation
-                </div>
-                <div className="mt-1 text-sm text-cyan-50">
-                  The board and logs are live.{" "}
-                  {taskManagerInstallAvailable ? "Install" : "Enable a skills-capable runtime to install"}{" "}
-                  <span className="font-semibold text-cyan-300">TASK-MANAGER</span> to let
-                  agents create, update, review, and complete tasks themselves.
-                </div>
-                {!taskManagerInstallAvailable && taskManagerInstallUnavailableReason ? (
-                  <div className="mt-2 font-mono text-[11px] text-cyan-100/70">
-                    {taskManagerInstallUnavailableReason}
-                  </div>
-                ) : null}
-                {taskManagerInstalling ? (
-                  <div className="mt-2">
-                    <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-100/70">
-                      <span>{taskManagerInstallProgressMessage?.trim() || "Installing"}</span>
-                      <span>{Math.max(0, Math.min(100, Math.round(taskManagerInstallProgressPercent)))}%</span>
-                    </div>
-                    <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800/90">
-                      <div
-                        className="h-full rounded-full bg-cyan-400 transition-[width] duration-500 ease-out"
-                        style={{
-                          width: `${Math.max(6, Math.min(100, taskManagerInstallProgressPercent))}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                ) : null}
-                {taskManagerInstallError ? (
-                  <div className="mt-2 rounded border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-sm text-rose-200">
-                    {taskManagerInstallError}
-                  </div>
-                ) : null}
-              </div>
-              <div className="shrink-0">
-                {taskManagerInstallAvailable ? (
-                  <button
-                    type="button"
-                    onClick={() => onInstallTaskManagerAction?.()}
-                    disabled={taskManagerInstalling || !onInstallTaskManagerAction}
-                    className="rounded border border-cyan-500/25 bg-cyan-500/12 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-100 transition-colors hover:border-cyan-400/50 hover:text-white disabled:opacity-60"
-                  >
-                    {taskManagerInstalling ? "Installing..." : "Install TASK-MANAGER"}
-                  </button>
-                ) : (
-                  <div className="rounded border border-white/10 bg-white/5 px-3 py-2 font-mono text-[10px] uppercase tracking-[0.14em] text-white/55">
-                    Skill install unavailable
-                  </div>
-                )}
-              </div>
+          <div className="mt-2 rounded border border-cyan-500/20 bg-cyan-500/8 px-3 py-2">
+            <div className="font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-200/80">
+              Task-manager system skill
             </div>
+            <div className="mt-1 text-sm text-cyan-50">
+              The board is built in. Use it manually now; when a skills-capable runtime is connected,
+              agents can create, update, review, and complete these tasks automatically.
+            </div>
+            {taskManagerInstalling ? (
+              <div className="mt-2">
+                <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase tracking-[0.14em] text-cyan-100/70">
+                  <span>{taskManagerInstallProgressMessage?.trim() || "Preparing task automation"}</span>
+                  <span>{Math.max(0, Math.min(100, Math.round(taskManagerInstallProgressPercent)))}%</span>
+                </div>
+                <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-800/90">
+                  <div
+                    className="h-full rounded-full bg-cyan-400 transition-[width] duration-500 ease-out"
+                    style={{
+                      width: `${Math.max(6, Math.min(100, taskManagerInstallProgressPercent))}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            ) : null}
+            {taskManagerInstallError ? (
+              <div className="mt-2 rounded border border-rose-500/20 bg-rose-500/8 px-3 py-2 text-sm text-rose-200">
+                {taskManagerInstallError}
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -560,9 +533,14 @@ export function TaskBoardView({
             onCanvasChangeAction={setCanvas}
             onMoveCardAction={onMoveCardAction}
             onCreateCardAction={onCreateCardAction}
+            onRequestClearAllAction={() => setClearPending("all")}
+            onConfirmClearAllAction={handleClearConfirm}
+            onCancelClearAllAction={() => setClearPending(null)}
             onSelectCardAction={onSelectCardAction}
             onUpdateCardAction={onUpdateCardAction}
             selectedCardId={selectedCard?.id ?? null}
+            clearAllPending={clearPending === "all"}
+            taskCount={allCards.length}
           />
         )}
 

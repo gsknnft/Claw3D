@@ -137,6 +137,12 @@ function edgeLabel(fromNode: CanvasNode, toNode: CanvasNode): string | undefined
   return undefined;
 }
 
+const stopEditableEventPropagation = (event: {
+  stopPropagation: () => void;
+}) => {
+  event.stopPropagation();
+};
+
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
@@ -144,15 +150,19 @@ function TaskNodeCard({
   node, card, selected,
   onSelect, onDragStart, onStatusChange, onStartEdge,
   onResizeStart,
+  onCardChange,
+  agents,
   drawingEdge,
 }: {
   node: CanvasTaskNode;
   card: TaskBoardCard;
+  agents: AgentState[];
   selected: boolean;
   drawingEdge: boolean;
   onSelect: () => void;
   onDragStart: (e: ReactPointerEvent, nodeId: string) => void;
   onStatusChange: (cardId: string, status: TaskBoardStatus) => void;
+  onCardChange: (cardId: string, patch: Partial<TaskBoardCard>) => void;
   onStartEdge: (nodeId: string) => void;
   onResizeStart: (e: ReactPointerEvent, nodeId: string) => void;
 }) {
@@ -177,22 +187,48 @@ function TaskNodeCard({
         onSelect();
       }}
     >
-      <div className="flex cursor-grab items-center justify-between gap-2 border-b border-white/8 px-3 py-2 active:cursor-grabbing">
-        <span className="truncate text-[12px] font-semibold text-white/95">{card.title}</span>
+      <div className="flex items-start justify-between gap-2 border-b border-white/8 px-3 py-2">
+        <textarea
+          value={card.title}
+          onChange={(e) => onCardChange(card.id, { title: e.target.value })}
+          onPointerDown={stopEditableEventPropagation}
+          onMouseDown={stopEditableEventPropagation}
+          onKeyDown={stopEditableEventPropagation}
+          onKeyUp={stopEditableEventPropagation}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect();
+          }}
+          placeholder="Task title"
+          rows={2}
+          className="min-h-[2.4rem] min-w-0 flex-1 resize-none bg-transparent text-[12px] font-semibold leading-relaxed text-white/95 outline-none placeholder:text-white/25"
+        />
         <span className="shrink-0 rounded bg-black/20 px-1.5 py-0.5 font-mono text-[8px] uppercase text-white/65">
           {STATUS_LABELS[card.status]}
         </span>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-1.5 px-3 py-2">
-        {card.description ? (
-          <p className="line-clamp-4 text-[11px] leading-relaxed text-white/72">{card.description}</p>
-        ) : null}
+        <textarea
+          value={card.description}
+          onChange={(e) => onCardChange(card.id, { description: e.target.value })}
+          onPointerDown={stopEditableEventPropagation}
+          onMouseDown={stopEditableEventPropagation}
+          onKeyDown={stopEditableEventPropagation}
+          onKeyUp={stopEditableEventPropagation}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSelect();
+          }}
+          placeholder="Describe the task..."
+          className="min-h-0 flex-1 resize-none bg-transparent text-[11px] leading-relaxed text-white/72 outline-none placeholder:text-white/25"
+        />
         {card.assignedAgentId ? (
           <span className="font-mono text-[9px] text-cyan-200/75">{card.assignedAgentId}</span>
         ) : null}
       </div>
-      <div className="border-t border-white/6 px-2 py-1.5">
+      <div className="grid grid-cols-2 gap-1.5 border-t border-white/6 px-2 py-1.5">
         <select
+          aria-label="Task status"
           value={card.status}
           onChange={(e) => { e.stopPropagation(); onStatusChange(card.id, e.target.value as TaskBoardStatus); }}
           onPointerDown={(e) => e.stopPropagation()}
@@ -200,6 +236,23 @@ function TaskNodeCard({
         >
           {(Object.keys(STATUS_LABELS) as TaskBoardStatus[]).map((s) => (
             <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+          ))}
+        </select>
+        <select
+          aria-label="Assign task agent"
+          value={card.assignedAgentId ?? ""}
+          onChange={(e) => {
+            e.stopPropagation();
+            onCardChange(card.id, { assignedAgentId: e.target.value || null });
+          }}
+          onPointerDown={(e) => e.stopPropagation()}
+          className="w-full rounded bg-black/20 px-1 py-0.5 font-mono text-[9px] text-white/75 outline-none"
+        >
+          <option value="">Assign</option>
+          {agents.map((agent) => (
+            <option key={agent.agentId} value={agent.agentId}>
+              {agent.name || agent.agentId}
+            </option>
           ))}
         </select>
       </div>
@@ -427,9 +480,14 @@ export function CanvasBoard({
   onCanvasChangeAction,
   onMoveCardAction,
   onCreateCardAction,
+  onRequestClearAllAction,
+  onConfirmClearAllAction,
+  onCancelClearAllAction,
   onSelectCardAction,
   onUpdateCardAction,
   selectedCardId,
+  clearAllPending,
+  taskCount,
 }: {
   canvas: JsonCanvas;
   cardMap: Map<string, TaskBoardCard>;
@@ -437,9 +495,14 @@ export function CanvasBoard({
   onCanvasChangeAction: (next: JsonCanvas) => void;
   onMoveCardAction: (cardId: string, status: TaskBoardStatus) => void;
   onCreateCardAction: () => void;
+  onRequestClearAllAction: () => void;
+  onConfirmClearAllAction: () => void;
+  onCancelClearAllAction: () => void;
   onSelectCardAction: (cardId: string | null) => void;
   onUpdateCardAction: (cardId: string, patch: Partial<TaskBoardCard>) => void;
   selectedCardId: string | null;
+  clearAllPending: boolean;
+  taskCount: number;
 }) {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom]             = useState(1);
@@ -754,6 +817,33 @@ export function CanvasBoard({
           className="rounded border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-cyan-100 hover:border-cyan-400/50">
           + Task
         </button>
+        {clearAllPending ? (
+          <>
+            <button
+              type="button"
+              onClick={onConfirmClearAllAction}
+              className="rounded border border-rose-400/45 bg-rose-500/18 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-rose-100 hover:border-rose-300/70"
+            >
+              Confirm Delete All
+            </button>
+            <button
+              type="button"
+              onClick={onCancelClearAllAction}
+              className="rounded border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-white/60 hover:text-white"
+            >
+              Cancel
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onRequestClearAllAction}
+            disabled={taskCount === 0}
+            className="rounded border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] text-rose-100 hover:border-rose-400/40 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            Delete All
+          </button>
+        )}
         <button
           type="button"
           onClick={() => setShowAgentPalette((v) => !v)}
@@ -766,11 +856,15 @@ export function CanvasBoard({
         <button
           type="button"
           onClick={toggleEdgeMode}
-          title={drawingEdge ? "Cancel connecting (Esc)" : "Connect nodes"}
+          title={
+            drawingEdge
+              ? "Click another card, agent, or group to finish the line. Press Esc to cancel."
+              : "Draw a line between cards, agents, or groups."
+          }
           className={`rounded border px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.12em] transition ${drawingEdge ? "border-violet-400/60 bg-violet-500/25 text-violet-200 ring-1 ring-violet-400/30" : "border-white/10 bg-white/5 text-white/50 hover:text-white"}`}
         >
           <GitBranch className="inline h-3 w-3 -mt-px mr-1" />
-          {drawingEdge ? "Connecting…" : "Connect"}
+          {drawingEdge ? "Click target" : "Connect Lines"}
         </button>
 
         {selectedNodeId && (
@@ -795,6 +889,17 @@ export function CanvasBoard({
             <Maximize2 className="h-3.5 w-3.5" />
           </button>
         </div>
+      </div>
+
+      <div className="shrink-0 border-b border-white/6 bg-cyan-500/[0.04] px-4 py-2 font-mono text-[10px] leading-relaxed text-cyan-50/65">
+        Type directly on task cards. Use <span className="text-cyan-200">Assign</span> to give work to an agent.{" "}
+        {drawingEdge ? (
+          <span className="text-violet-100">Now click a second card, agent, or group to finish the line.</span>
+        ) : (
+          <>
+            Use <span className="text-violet-200">Connect Lines</span>, then click one card and another card/agent.
+          </>
+        )}
       </div>
 
       {/* ── Agent palette (slides in below toolbar) ── */}
@@ -870,11 +975,13 @@ export function CanvasBoard({
                   key={node.id}
                   node={node}
                   card={card}
+                  agents={agents}
                   selected={selectedNodeId === node.id || selectedCardId === card.id}
                   drawingEdge={drawingEdge}
                   onSelect={() => { setSelectedNodeId(node.id); onSelectCardAction(card.id); }}
                   onDragStart={onNodeDragStart}
                   onStatusChange={onMoveCardAction}
+                  onCardChange={onUpdateCardAction}
                   onStartEdge={handleStartEdge}
                   onResizeStart={onNodeResizeStart}
                 />
