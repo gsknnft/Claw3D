@@ -1495,11 +1495,14 @@ export function OfficeScreen({
       setOfficeCameraCenterSignal((current) => current + 1);
 
       if (floor.kind !== "runtime") {
-        setPendingFloorRuntimeSwitch(null);
-        if (status === "connected" || status === "connecting") {
-          disconnect();
+        // Outside floors (stadium, campus) are spectator-only — don't tear down a live connection.
+        if (floor.zone !== "outside") {
+          setPendingFloorRuntimeSwitch(null);
+          if (status === "connected" || status === "connecting") {
+            disconnect();
+          }
         }
-        if (floor.provider === "demo") {
+        if (floor.provider === "demo" && floor.zone !== "outside") {
           setSelectedAdapterType("demo");
           hydrateAgents([createDemoMainAgentSeed()], MAIN_AGENT_ID);
           setAgentsLoaded(true);
@@ -4848,6 +4851,7 @@ export function OfficeScreen({
           agents={allVisibleAgents}
           storageNamespace={activeFloor.id}
           layoutPreset={activeFloor.kind === "lobby" ? "lobby" : "office"}
+          activeFloorKind={activeFloor.kind}
           officeCenterSignal={officeCameraCenterSignal}
           animationState={officeAnimationState}
           deskAssignmentByDeskUid={deskAssignmentByDeskUid}

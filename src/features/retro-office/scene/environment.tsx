@@ -167,22 +167,40 @@ function OfficeFlagPole({
   );
 }
 
-import {
-  SOCCER_STADIUM_BASE_WIDTH,
-  SOCCER_STADIUM_BASE_DEPTH,
-  SOCCER_FIELD_DEPTH,
-  SoccerStadium,
-} from "@/features/retro-office/scene/soccer-stadium";
+import { SoccerStadium } from "@/features/retro-office/scene/soccer-stadium";
 
-const SOCCER_ENTRY_PATH_WIDTH = 1.6;
-const SOCCER_ENTRY_OPENING_WIDTH = 2.2;
 
+// Standalone scene rendered when the Stadium floor is active.
+// No office building — just open grass and the pitch.
+const STADIUM_GROUND_SIZE = 32;
+function StadiumFloorScene() {
+  return (
+    <group>
+      {/* Open grass ground */}
+      <mesh position={[0, -0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[STADIUM_GROUND_SIZE, STADIUM_GROUND_SIZE]} />
+        <meshStandardMaterial color="#2e5930" roughness={0.97} metalness={0.01} />
+      </mesh>
+      {/* Lighter inner pitch surround */}
+      <mesh position={[0, -0.01, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <planeGeometry args={[STADIUM_GROUND_SIZE * 0.72, STADIUM_GROUND_SIZE * 0.72]} />
+        <meshStandardMaterial color="#3a6e3c" roughness={0.96} metalness={0.01} />
+      </mesh>
+      <SoccerStadium centerX={0} centerZ={0} />
+    </group>
+  );
+}
 
 export const FloorAndWalls = memo(function FloorAndWalls({
   showRemoteOffice = true,
+  floorKind = "lobby",
 }: {
   showRemoteOffice?: boolean;
+  floorKind?: string;
 }) {
+  if (floorKind === "stadium") {
+    return <StadiumFloorScene />;
+  }
   const districtWidth = CANVAS_W * SCALE;
   const districtHeight = CANVAS_H * SCALE;
   const localOfficeWidth = LOCAL_OFFICE_CANVAS_WIDTH * SCALE;
@@ -222,24 +240,10 @@ export const FloorAndWalls = memo(function FloorAndWalls({
   const localSouthWallZ = localOfficeCenterZ + localOfficeHeight / 2;
   const localWestWallX = localOfficeCenterX - localOfficeWidth / 2;
   const localEastWallX = localOfficeCenterX + localOfficeWidth / 2;
-  const stadiumCenterX = localOfficeCenterX;
-  const stadiumCenterZ = pathCenterZ;
-  const stadiumNorthEdgeZ = stadiumCenterZ - SOCCER_FIELD_DEPTH / 2;
-  const outdoorSouthEdgeZ = stadiumCenterZ + SOCCER_STADIUM_BASE_DEPTH / 2 + 0.92;
-  const localGroundCenterZ = (localNorthWallZ + outdoorSouthEdgeZ) / 2;
-  const localGroundHeight = outdoorSouthEdgeZ - localNorthWallZ;
-  const southWallWingWidth = Math.max(
-    0.8,
-    (localOfficeWidth - SOCCER_ENTRY_OPENING_WIDTH) / 2,
-  );
-  const southWallWingOffsetX = SOCCER_ENTRY_OPENING_WIDTH / 2 + southWallWingWidth / 2;
-  const pathEntryStartZ = localSouthWallZ + 0.14;
-  const entryPathLength = Math.max(0.42, stadiumNorthEdgeZ - pathEntryStartZ);
-  const entryPathCenterZ = pathEntryStartZ + entryPathLength / 2;
   const groundCenterX = showRemoteOffice ? districtCenterX : localOfficeCenterX;
-  const groundCenterZ = showRemoteOffice ? districtCenterZ : localGroundCenterZ;
+  const groundCenterZ = showRemoteOffice ? districtCenterZ : localOfficeCenterZ;
   const groundWidth = showRemoteOffice ? districtWidth : localOfficeWidth;
-  const groundHeight = showRemoteOffice ? districtHeight : localGroundHeight;
+  const groundHeight = showRemoteOffice ? districtHeight : localOfficeHeight;
 
   return (
     <group>
@@ -269,45 +273,6 @@ export const FloorAndWalls = memo(function FloorAndWalls({
         <planeGeometry args={[localOfficeWidth, localOfficeHeight, 22, 14]} />
         <meshLambertMaterial color="#c8a97e" />
       </mesh>
-
-      <mesh
-        position={[pathCenterX, 0.002, pathCenterZ]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        receiveShadow
-      >
-        <planeGeometry
-          args={[
-            (CITY_PATH_ZONE.maxX - CITY_PATH_ZONE.minX) * SCALE,
-            (CITY_PATH_ZONE.maxY - CITY_PATH_ZONE.minY) * SCALE,
-          ]}
-        />
-        <meshStandardMaterial color="#6d8b5a" roughness={0.96} metalness={0.02} />
-      </mesh>
-
-      <mesh
-        position={[pathCenterX, 0.004, pathCenterZ]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        receiveShadow
-      >
-        <planeGeometry
-          args={[
-            (CITY_PATH_ZONE.maxX - CITY_PATH_ZONE.minX) * SCALE * 0.72,
-            (CITY_PATH_ZONE.maxY - CITY_PATH_ZONE.minY) * SCALE * 0.26,
-          ]}
-        />
-        <meshStandardMaterial color="#c9ae8d" roughness={0.94} metalness={0.02} />
-      </mesh>
-
-      <mesh
-        position={[localOfficeCenterX, 0.008, entryPathCenterZ]}
-        rotation={[-Math.PI / 2, 0, 0]}
-        receiveShadow
-      >
-        <planeGeometry args={[SOCCER_ENTRY_PATH_WIDTH, entryPathLength]} />
-        <meshStandardMaterial color="#d8c09f" roughness={0.93} metalness={0.03} />
-      </mesh>
-
-      <SoccerStadium centerX={stadiumCenterX} centerZ={stadiumCenterZ} />
 
       {showRemoteOffice ? (
         <>
@@ -597,25 +562,15 @@ export const FloorAndWalls = memo(function FloorAndWalls({
                 />
               </mesh>
             ) : null}
-            {([-1, 1] as const).map((direction) => (
-              <mesh
-                key={`local-south-wall-${direction}`}
-                position={[
-                  localOfficeCenterX + direction * southWallWingOffsetX,
-                  0.5,
-                  localSouthWallZ,
-                ]}
-                receiveShadow
-              >
-                <boxGeometry args={[southWallWingWidth, 1, 0.12]} />
-                <meshStandardMaterial
-                  color={wallColor}
-                  emissive={wallEmissive}
-                  emissiveIntensity={0.4}
-                  roughness={0.9}
-                />
-              </mesh>
-            ))}
+            <mesh position={[localOfficeCenterX, 0.5, localSouthWallZ]} receiveShadow>
+              <boxGeometry args={[localOfficeWidth, 1, 0.12]} />
+              <meshStandardMaterial
+                color={wallColor}
+                emissive={wallEmissive}
+                emissiveIntensity={0.4}
+                roughness={0.9}
+              />
+            </mesh>
             {showRemoteOffice ? (
               <mesh
                 position={[localOfficeCenterX, 0.5, localSouthWallZ + remoteOfficeOffsetZ]}
@@ -690,19 +645,10 @@ export const FloorAndWalls = memo(function FloorAndWalls({
           <meshLambertMaterial color="#0c0c10" />
         </mesh>
       ) : null}
-      {([-1, 1] as const).map((direction) => (
-        <mesh
-          key={`local-south-trim-${direction}`}
-          position={[
-            localOfficeCenterX + direction * southWallWingOffsetX,
-            0.03,
-            localSouthWallZ - 0.04,
-          ]}
-        >
-          <boxGeometry args={[southWallWingWidth, 0.06, 0.04]} />
-          <meshLambertMaterial color="#0c0c10" />
-        </mesh>
-      ))}
+      <mesh position={[localOfficeCenterX, 0.03, localSouthWallZ - 0.04]}>
+        <boxGeometry args={[localOfficeWidth, 0.06, 0.04]} />
+        <meshLambertMaterial color="#0c0c10" />
+      </mesh>
       {showRemoteOffice ? (
         <mesh position={[localOfficeCenterX, 0.03, localSouthWallZ - 0.04 + remoteOfficeOffsetZ]}>
           <boxGeometry args={[localOfficeWidth, 0.06, 0.04]} />

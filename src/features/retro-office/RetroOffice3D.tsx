@@ -2250,6 +2250,7 @@ export function RetroOffice3D({
   readOnly = false,
   storageNamespace = "default",
   layoutPreset = "office",
+  activeFloorKind = "lobby",
   deskAssignmentByDeskUid = EMPTY_STRING_RECORD,
   cleaningCues = EMPTY_CLEANING_CUES,
   deskHoldByAgentId = EMPTY_BOOLEAN_RECORD,
@@ -2364,6 +2365,7 @@ export function RetroOffice3D({
   readOnly?: boolean;
   storageNamespace?: string;
   layoutPreset?: OfficeLayoutPreset;
+  activeFloorKind?: string;
   deskAssignmentByDeskUid?: Record<string, string>;
   cleaningCues?: OfficeCleaningCue[];
   deskHoldByAgentId?: Record<string, boolean>;
@@ -5277,7 +5279,7 @@ export function RetroOffice3D({
             />
 
             {/* Floor + walls — always visible, no async loading. */}
-            <SceneFloorAndWalls showRemoteOffice={remoteOfficeEnabled} />
+            <SceneFloorAndWalls showRemoteOffice={remoteOfficeEnabled} floorKind={activeFloorKind} />
 
             {/* Wall pictures — procedural, no async loading. */}
             <SceneWallPictures showRemoteOffice={remoteOfficeEnabled} />
@@ -5913,8 +5915,8 @@ export function RetroOffice3D({
               </div>
             </button>
           ) : null}
-          <SoccerMatchPanelCard />
-          <SoccerMatchDebugCard />
+          {activeFloorKind === "stadium" ? <SoccerMatchPanelCard /> : null}
+          {activeFloorKind === "stadium" ? <SoccerMatchDebugCard /> : null}
         </div>
       ) : null}
 

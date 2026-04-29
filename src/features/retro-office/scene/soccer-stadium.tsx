@@ -2489,6 +2489,55 @@ export const SoccerStadium = memo(function SoccerStadium({
         </group>
       ))}
 
+      {/* East and west end stands — enclose the stadium on all four sides. */}
+      {[-1, 1].map((xDir) => (
+        <group key={`end-stands-${xDir}`}>
+          {[0, 1, 2].map((tier) => (
+            <group key={`end-stand-${xDir}-${tier}`}>
+              <mesh
+                position={[
+                  cx + xDir * (FIELD_WIDTH / 2 + 0.42 + tier * 0.16),
+                  0.17 + tier * 0.09,
+                  cz,
+                ]}
+                castShadow
+                receiveShadow
+              >
+                <boxGeometry args={[0.28, 0.08, FIELD_DEPTH - tier * 1.15]} />
+                <meshStandardMaterial
+                  color={xDir < 0 ? homeColor : awayColor}
+                  roughness={0.82}
+                  metalness={0.12}
+                />
+              </mesh>
+              {/* End-stand spectators */}
+              {Array.from({ length: Math.max(6, 9 - tier) }, (_, i) => {
+                const seatCount = Math.max(6, 9 - tier);
+                const ratio = seatCount === 1 ? 0.5 : i / (seatCount - 1);
+                const standDepth = FIELD_DEPTH - tier * 1.15;
+                const specZ = cz - standDepth / 2 + 0.4 + ratio * Math.max(standDepth - 0.8, 0.1);
+                const specX = cx + xDir * (FIELD_WIDTH / 2 + 0.42 + tier * 0.16) + xDir * (i % 2 === 0 ? 0.03 : -0.03);
+                const topColor = i % 3 !== 1 ? (xDir < 0 ? homeColor : awayColor) : CROWD_OUTFIT_COLORS[(i + tier) % CROWD_OUTFIT_COLORS.length]!;
+                const accentColor = i % 4 === 0 ? "#f8fafc" : (xDir < 0 ? awayColor : homeColor);
+                return (
+                  <SpectatorModel
+                    key={`end-spectator-${xDir}-${tier}-${i}`}
+                    position={[specX, 0.26 + tier * 0.09, specZ]}
+                    facing={xDir < 0 ? Math.PI / 2 : -Math.PI / 2}
+                    topColor={topColor}
+                    accentColor={accentColor}
+                    skinColor={CROWD_SKIN_TONES[(i + tier * 2) % CROWD_SKIN_TONES.length]!}
+                    hairColor={CROWD_HAIR_COLORS[(i + tier) % CROWD_HAIR_COLORS.length]!}
+                    motionSeed={tier * 20 + i + (xDir < 0 ? 200 : 300)}
+                    isLive={Boolean(isLive)}
+                  />
+                );
+              })}
+            </group>
+          ))}
+        </group>
+      ))}
+
       {/* Corner floodlights. */}
       {[-1, 1].flatMap((zDir) =>
         [-1, 1].map((xDir) => {

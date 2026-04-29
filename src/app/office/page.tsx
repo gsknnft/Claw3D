@@ -1,8 +1,13 @@
 import { Suspense } from "react";
+import dynamic from "next/dynamic";
 import { RunningAvatarLoader } from "@/features/agents/components/RunningAvatarLoader";
 import { AgentStoreProvider } from "@/features/agents/state/store";
 import { ClawFCProvider } from "@/lib/clawfc/context";
-import { OfficeScreen } from "@/features/office/screens/OfficeScreen";
+
+const OfficeScreen = dynamic(
+  () => import("@/features/office/screens/OfficeScreen").then((m) => ({ default: m.OfficeScreen })),
+  { ssr: false },
+);
 
 const ENABLED_RE = /^(1|true|yes|on)$/i;
 

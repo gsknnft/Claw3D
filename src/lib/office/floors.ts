@@ -17,9 +17,10 @@ export type FloorId =
   | "custom-second"
   | "training"
   | "traders-floor"
-  | "campus";
+  | "campus"
+  | "stadium";
 
-export type FloorKind = "lobby" | "runtime" | "training" | "market" | "campus";
+export type FloorKind = "lobby" | "runtime" | "training" | "market" | "campus" | "stadium";
 
 export type FloorDefinition = {
   id: FloorId;
@@ -133,6 +134,17 @@ export const OFFICE_FLOORS: readonly FloorDefinition[] = [
     sortOrder: 100,
     runtimeProfileId: null,
   },
+  {
+    id: "stadium",
+    label: "Stadium",
+    shortLabel: "Stadium",
+    provider: "demo",
+    kind: "stadium",
+    zone: "outside",
+    enabled: true,
+    sortOrder: 110,
+    runtimeProfileId: null,
+  },
 ] as const;
 
 export const DEFAULT_ACTIVE_FLOOR_ID: FloorId = "lobby";
@@ -176,7 +188,7 @@ export const listAvailableFloorsForAdapter = (
 ): FloorDefinition[] => {
   return OFFICE_FLOORS.filter((floor) => {
     if (!floor.enabled) return false;
-    if (floor.kind === "lobby") return true;
+    if (floor.kind === "lobby" || floor.kind === "stadium") return true;
     if (floor.kind === "runtime") {
       return (
         Boolean(activeAdapterType) &&
