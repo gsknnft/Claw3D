@@ -71,7 +71,14 @@ const readOpenclawGatewayDefaults = (): StudioGatewaySettings | null => {
 
 const normalizeAdapterType = (value: string | undefined): StudioGatewayAdapterType | null => {
   const normalized = value?.trim().toLowerCase();
-  if (normalized === "openclaw" || normalized === "hermes" || normalized === "demo" || normalized === "custom") {
+  if (
+    normalized === "openclaw" ||
+    normalized === "hermes" ||
+    normalized === "demo" ||
+    normalized === "local" ||
+    normalized === "claw3d" ||
+    normalized === "custom"
+  ) {
     return normalized;
   }
   return null;
@@ -122,13 +129,41 @@ const buildEnvGatewayDefaults = (): StudioGatewaySettings | null => {
   });
 };
 
+const mergeGatewayProfiles = (
+  base: StudioGatewaySettings,
+  extra: StudioGatewaySettings | null
+): StudioGatewaySettings => {
+  if (!extra?.profiles) {
+    return base;
+  }
+  const mergedProfiles: Partial<Record<StudioGatewayAdapterType, StudioGatewayProfile>> = {
+    ...(base.profiles ?? {}),
+  };
+  for (const [adapterType, profile] of Object.entries(extra.profiles) as Array<
+    [StudioGatewayAdapterType, StudioGatewayProfile | undefined]
+  >) {
+    if (!profile || mergedProfiles[adapterType]) {
+      continue;
+    }
+    mergedProfiles[adapterType] = profile;
+  }
+  return {
+    ...base,
+    profiles: mergedProfiles,
+  };
+};
+
 export const loadLocalGatewayDefaults = (): StudioGatewaySettings | null => {
   const fromFile = readOpenclawGatewayDefaults();
-  if (fromFile) return fromFile;
-  // Fall back to env vars so operators can configure the gateway URL at
-  // runtime without openclaw.json and without a rebuild. If no explicit
-  // URL is provided, also expose local Hermes/Demo adapter ports when set.
-  return buildEnvGatewayDefaults();
+  const fromEnv = buildEnvGatewayDefaults();
+  if (fromEnv) {
+    return mergeGatewayProfiles(fromEnv, fromFile);
+  }
+  if (fromFile) {
+    return fromFile;
+  }
+  // No local defaults exist in either source.
+  return null;
 };
 
 export const loadStudioSettings = (): StudioSettings => {

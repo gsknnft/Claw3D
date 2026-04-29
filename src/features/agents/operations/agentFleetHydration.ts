@@ -63,6 +63,20 @@ type ExecApprovalsSnapshot = {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value && typeof value === "object" && !Array.isArray(value));
 
+const parseIdentityNameFromContent = (content: string): string | null => {
+  for (const line of content.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (/^##\s+/.test(trimmed)) break;
+    const normalized = trimmed.replace(/^[-*]\s*/, "");
+    const match = /^name\s*:\s*(.+)$/i.exec(normalized);
+    if (!match) continue;
+    const value = match[1]?.trim().replace(/^[*_]+|[*_]+$/g, "").trim() ?? "";
+    if (!value || isTemporarySkillAgentName(value)) continue;
+    return value;
+  }
+  return null;
+};
+
 const resolveAgentsListFromHelloSnapshot = (snapshot: unknown): AgentsListResult | null => {
   if (!isRecord(snapshot)) return null;
   const health = isRecord(snapshot.health) ? snapshot.health : null;
@@ -175,8 +189,59 @@ export async function hydrateAgentFleetFromGateway(params: {
   }
   agentsResult = {
     ...agentsResult,
-    agents: agentsResult.agents.filter(
-      (agent) => !isTemporarySkillAgentName(agent.name ?? agent.identity?.name)
+    agents: await Promise.all(
+      agentsResult.agents.map(async (agent) => {
+        const identityName =
+          typeof agent.identity?.name === "string" ? agent.identity.name.trim() : "";
+        const listedName = typeof agent.name === "string" ? agent.name.trim() : "";
+        const hasStableIdentityName =
+          Boolean(identityName) && !isTemporarySkillAgentName(identityName);
+        const needsIdentityRecovery =
+          !identityName ||
+          isTemporarySkillAgentName(identityName) ||
+          isTemporarySkillAgentName(listedName);
+        if (!needsIdentityRecovery) {
+          return agent;
+        }
+        if (isTemporarySkillAgentName(listedName) && hasStableIdentityName) {
+          return {
+            ...agent,
+            name: identityName,
+            identity: {
+              ...(agent.identity ?? {}),
+              name: identityName,
+            },
+          };
+        }
+        try {
+          const result = (await params.client.call("agents.files.get", {
+            agentId: agent.id,
+            name: "IDENTITY.md",
+          })) as { file?: { missing?: unknown; content?: unknown } };
+          const file = result?.file;
+          const record =
+            file && typeof file === "object" ? (file as Record<string, unknown>) : null;
+          if (record?.missing === true || typeof record?.content !== "string") {
+            return agent;
+          }
+          const recoveredName = parseIdentityNameFromContent(record.content);
+          if (!recoveredName || isTemporarySkillAgentName(recoveredName)) {
+            return agent;
+          }
+          return {
+            ...agent,
+            name: recoveredName,
+            identity: {
+              ...(agent.identity ?? {}),
+              name: recoveredName,
+            },
+          };
+        } catch {
+          return agent;
+        }
+      })
+    ).then((agents) =>
+      agents.filter((agent) => !isTemporarySkillAgentName(agent.name ?? agent.identity?.name))
     ),
   };
   const mainKey = agentsResult.mainKey?.trim() || "main";
