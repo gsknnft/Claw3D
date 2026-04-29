@@ -9,7 +9,7 @@ separate concerns:
 - remote office behavior on native builds
 - WebLLM as a shippable in-browser demo
 - BitNet as a native/on-device runtime target
-- Vera-Torch as the server-side/local stack integration point
+- Custom Stack as the server-side/local stack integration point
 
 Those lanes are now split into focused docs.
 
@@ -19,7 +19,8 @@ Those lanes are now split into focused docs.
 | --- | --- |
 | [on-device-ai.md](on-device-ai.md) | WebLLM directly in Claw3D for a shippable no-backend demo |
 | [mobile-llm-strategy.md](mobile-llm-strategy.md) | Android app LLM options and recommended rollout order |
-| [bitnet-vera-torch.md](bitnet-vera-torch.md) | BitNet model/runtime notes and how it should route through Vera-Torch |
+| [bitnet-custom.md](bitnet-custom.md) | BitNet model/runtime notes and how it should route through custom runtimes |
+| [native-os-ai.md](native-os-ai.md) | Phone/vendor/system AI as a later platform adapter lane |
 | [remote-office-native.md](remote-office-native.md) | Remote office modes and native APK constraints |
 | [runtime-profiles.md](runtime-profiles.md) | Existing Claw3D runtime profile model |
 
@@ -33,11 +34,11 @@ Use two separate implementation lanes:
    - lazy-loaded
    - no native Android plugin
 
-2. **BitNet Native / Vera-Torch**
+2. **BitNet Native / Custom Server/Proxy**
    - long-term higher-performance local/offline lane
    - `bitnet.cpp` runtime
    - Android NDK/JNI/Capacitor work for true on-device
-   - Vera-Torch server/proxy work for stack integration
+   - Custom server/proxy work for stack integration
 
 Do not force the WebLLM demo through the BitNet/native path. Do not block the
 Android app on BitNet native work.

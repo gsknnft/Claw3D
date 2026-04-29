@@ -9,6 +9,7 @@ demo path from the heavier native inference path.
 - Preserve the existing gateway/runtime profile model.
 - Avoid bundling very large model files into the APK.
 - Let advanced users connect to their own runtime over LAN or Tailscale.
+- Treat phone/vendor AI as optional platform acceleration, not the baseline.
 - Leave room for true native/offline inference later.
 
 ## Current Native Connection State
@@ -83,7 +84,27 @@ Requirements:
 
 This is valuable, but it should not block the app or the WebLLM demo path.
 
-See [bitnet-vera-torch.md](bitnet-vera-torch.md).
+See [bitnet-custom.md](bitnet-custom.md).
+
+## Option 4: Native OS AI
+
+This is the phone-built-in-AI lane.
+
+Some Android devices now expose local or vendor-managed AI features. Claw3D
+should not assume those APIs are present, portable, private, or fully offline.
+They are still useful as an optional provider behind the same **On-Device AI**
+button.
+
+The runtime should report what it is actually using:
+
+```txt
+local-only | vendor-managed | unknown
+```
+
+If native OS AI is unavailable or not enabled, Claw3D should fall back to
+WebLLM, then scripted Demo.
+
+See [native-os-ai.md](native-os-ai.md).
 
 ## Rollout Order
 
@@ -95,11 +116,15 @@ See [bitnet-vera-torch.md](bitnet-vera-torch.md).
    - document LAN/Tailscale flows for OpenClaw, Hermes, Vera-Torch, and BitNet
    - polish the connect UI around saved profiles
 
-3. **Remote office native fix**
+3. **Native OS AI capability probe**
+   - optional platform fast path when device APIs are available
+   - keep WebLLM and scripted Demo as fallbacks
+
+4. **Remote office native fix**
    - separate from LLM work
    - make gateway mode use direct client-side connection on native
 
-4. **BitNet native**
+5. **BitNet native**
    - only after the runtime and UX story is stable
 
 ## Non-Goals For The First Android Pass

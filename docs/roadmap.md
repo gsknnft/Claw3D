@@ -16,6 +16,9 @@ This file captures the near-term direction for Claw3D so outside contributors ca
 - Expand runtime profiles from the new shared `agents.message` / `agents.handoff` contract into fuller provider adapters and richer multi-agent handoff flows.
 - Add **On-Device AI** as a WebLLM-backed runtime profile for a real no-backend
   demo agent.
+- Add a Native OS AI capability probe behind the On-Device AI profile so phones
+  with supported local/vendor AI APIs can use them without changing the Claw3D
+  runtime UX.
 - Fix remote office behavior on native APKs so `openclaw_gateway` can use a
   direct device-to-gateway connection instead of a server-side API route.
 

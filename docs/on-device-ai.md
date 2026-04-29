@@ -69,6 +69,13 @@ If unsupported, fall back to:
 - remote gateway
 - local OpenAI-compatible endpoint
 
+On Android, a future native OS AI provider can sit behind the same
+**On-Device AI** option when the device exposes a usable platform API. That
+provider must identify whether it is truly `local-only`, `vendor-managed`, or
+`unknown` before presenting itself as private/offline.
+
+See [native-os-ai.md](native-os-ai.md).
+
 ### Model Defaults
 
 Use one small default and one better optional model.

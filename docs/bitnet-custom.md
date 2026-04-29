@@ -1,4 +1,4 @@
-# BitNet And Vera-Torch Integration
+# BitNet And Custom Integration
 
 This doc captures the BitNet lane for Claw3D and the broader SigilNet stack.
 
@@ -43,25 +43,25 @@ bitnet.cpp server on PC
 This requires no native Android plugin. It also matches the existing Claw3D
 runtime profile model.
 
-### 2. Vera-Torch Proxy / Router
+### 2. Custom Proxy / Router
 
 Best stack integration route.
 
 ```txt
-Claw3D / Vera Shell
-  -> Vera-Torch API
+Claw3D / Custom UI
+  -> Custom API
   -> model router
   -> BitNet backend when model format is i2_s
 ```
 
-Vera-Torch should not try to treat BitNet as a normal llama.cpp model. It should
+Custom should not try to treat BitNet as a normal llama.cpp model. It should
 route BitNet models to a BitNet backend:
 
 - spawn/manage a `bitnet.cpp` server subprocess, or
 - proxy to a configured external BitNet server, or
 - later call a native/Python binding if one exists and is stable.
 
-The clean contract is OpenAI-compatible HTTP. Vera-Torch can keep exposing its
+The clean contract is OpenAI-compatible HTTP. Custom can keep exposing its
 normal chat/completions surface while selecting the backend internally.
 
 ### 3. Android Native BitNet
@@ -79,7 +79,7 @@ bitnet.cpp
 This requires model download/cache management. The 1.13 GB model should not be
 bundled inside the APK.
 
-## Recommended Vera-Torch Shape
+## Recommended Custom Shape
 
 Add a model runtime descriptor:
 
@@ -108,7 +108,7 @@ Claw3D should not need to know BitNet internals.
 
 For Claw3D, BitNet should appear as one of:
 
-- `local` runtime profile pointing at Vera-Torch
+- `local` runtime profile pointing at Custom
 - `custom` runtime profile pointing at a BitNet OpenAI-compatible server
 - future native `bitnet` or `on-device` runtime provider
 
@@ -116,9 +116,9 @@ That keeps Claw3D clean and avoids leaking model/runtime details into UI state.
 
 ## Open Questions
 
-- Is the BitNet server endpoint stable enough to use as the first Vera-Torch
+- Is the BitNet server endpoint stable enough to use as the first Custom
   backend?
-- Should Vera-Torch own the BitNet subprocess lifecycle, or only proxy to an
+- Should Custom own the BitNet subprocess lifecycle, or only proxy to an
   externally managed server first?
 - Do we want a smaller BitNet model for Android-first testing before the 2B
   model?
@@ -129,6 +129,6 @@ That keeps Claw3D clean and avoids leaking model/runtime details into UI state.
 Use the BitNet server path first:
 
 1. Start BitNet on the workstation/server.
-2. Point Vera-Torch or Claw3D `local/custom` profile at it.
+2. Point Custom or Claw3D `local/custom` profile at it.
 3. Confirm chat quality and latency through the normal UI.
 4. Only then build the Android native plugin.

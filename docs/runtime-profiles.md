@@ -8,6 +8,7 @@ Claw3D now treats runtime backends as named saved profiles instead of one global
 - `hermes`
 - `demo`
 - `webllm` (planned)
+- `native-ai` (planned)
 - `local`
 - `claw3d`
 - `custom`
@@ -61,6 +62,16 @@ runtime, and expose one local demo agent through the existing runtime provider
 seam. It should not require a WebSocket gateway.
 
 See [on-device-ai.md](on-device-ai.md).
+
+### `native-ai` (planned)
+
+A phone/platform AI profile behind the same **On-Device AI** UX.
+
+This is not the baseline demo path because device APIs vary. When available, it
+should report whether the runtime is `local-only`, `vendor-managed`, or
+`unknown`, then fall back to `webllm` or `demo` if unsupported.
+
+See [native-os-ai.md](native-os-ai.md).
 
 ### `local`
 
