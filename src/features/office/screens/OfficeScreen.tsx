@@ -946,6 +946,21 @@ const inferRunningFromAgentSessions = async (params: {
   };
 };
 
+const ANIMATION_CLOCK_TICK_MS = 250;
+
+const useAnimationClockMs = () => {
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setNowMs(Date.now());
+    }, ANIMATION_CLOCK_TICK_MS);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, []);
+  return nowMs;
+};
+
 type OfficeScreenProps = {
   showOpenClawConsole?: boolean;
 };
@@ -3255,7 +3270,7 @@ export function OfficeScreen({
     enabled: runtimeSupportsSkills,
     agents: state.agents,
   });
-  const animationNowMs = Date.now();
+  const animationNowMs = useAnimationClockMs();
   const officeAnimationState = useMemo(() => {
     const base = buildOfficeAnimationState({
       state: officeTriggerState,
@@ -3317,13 +3332,24 @@ export function OfficeScreen({
     textMessageByAgentId,
     workingUntilByAgentId,
   } = officeAnimationState;
-  const immediateGymHoldByAgentId = useMemo(
-    () => ({
+  const immediateGymHoldRef = useRef<Record<string, boolean>>({});
+  const immediateGymHoldByAgentId = useMemo(() => {
+    const candidate: Record<string, boolean> = {
       ...marketplaceGymHoldByAgentId,
       ...skillGymHoldByAgentId,
-    }),
-    [marketplaceGymHoldByAgentId, skillGymHoldByAgentId],
-  );
+    };
+    const previous = immediateGymHoldRef.current;
+    const previousKeys = Object.keys(previous);
+    const candidateKeys = Object.keys(candidate);
+    if (
+      previousKeys.length === candidateKeys.length &&
+      candidateKeys.every((key) => previous[key] === candidate[key])
+    ) {
+      return previous;
+    }
+    immediateGymHoldRef.current = candidate;
+    return candidate;
+  }, [marketplaceGymHoldByAgentId, skillGymHoldByAgentId]);
 
   useEffect(() => {
     const now = Date.now();
@@ -3410,6 +3436,10 @@ export function OfficeScreen({
     spokenPhoneCallKeysRef.current = new Set(
       [...spokenPhoneCallKeysRef.current].filter((key) => activeKeys.has(key)),
     );
+    const hasStalePreparedPhoneCalls = Object.values(
+      preparedPhoneCallsByAgentId,
+    ).some((entry) => !activeKeys.has(entry.requestKey));
+    if (!hasStalePreparedPhoneCalls) return;
     setPreparedPhoneCallsByAgentId((previous) => {
       const next = Object.fromEntries(
         Object.entries(previous).filter(([, entry]) => activeKeys.has(entry.requestKey)),
@@ -3422,7 +3452,7 @@ export function OfficeScreen({
       }
       return next;
     });
-  }, [phoneCallByAgentId]);
+  }, [phoneCallByAgentId, preparedPhoneCallsByAgentId]);
 
   useEffect(() => {
     const requests = Object.entries(phoneCallByAgentId);
@@ -3570,6 +3600,10 @@ export function OfficeScreen({
     preparedTextMessageKeysRef.current = new Set(
       [...preparedTextMessageKeysRef.current].filter((key) => activeKeys.has(key)),
     );
+    const hasStalePreparedTextMessages = Object.values(
+      preparedTextMessagesByAgentId,
+    ).some((entry) => !activeKeys.has(entry.requestKey));
+    if (!hasStalePreparedTextMessages) return;
     setPreparedTextMessagesByAgentId((previous) => {
       const next = Object.fromEntries(
         Object.entries(previous).filter(([, entry]) => activeKeys.has(entry.requestKey)),
@@ -3582,7 +3616,7 @@ export function OfficeScreen({
       }
       return next;
     });
-  }, [textMessageByAgentId]);
+  }, [preparedTextMessagesByAgentId, textMessageByAgentId]);
 
   useEffect(() => {
     const requests = Object.entries(textMessageByAgentId);
