@@ -5,6 +5,8 @@
     <content url="file://$MODULE_DIR$">
       <excludeFolder url="file://$MODULE_DIR$/.next" />
       <excludeFolder url="file://$MODULE_DIR$/node_modules" />
+      <excludeFolder url="file://$MODULE_DIR$/out" />
+      <excludeFolder url="file://$MODULE_DIR$/mobile/node_modules" />
     </content>
     <orderEntry type="sourceFolder" forTests="false" />
   </component>

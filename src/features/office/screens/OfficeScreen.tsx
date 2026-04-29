@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useCapacitorBackButton } from "@/hooks/useCapacitorBackButton";
 import { MessageSquare, ChevronDown, ChevronLeft, ChevronRight, Mic } from "lucide-react";
 import { RetroOffice3D } from "@/features/retro-office/RetroOffice3D";
 import type { OfficeAgent } from "@/features/retro-office/core/types";
@@ -1150,6 +1151,7 @@ export function OfficeScreen({
   >(new Map());
   const handledJukeboxRequestKeyByAgentIdRef = useRef<Record<string, string>>({});
   const router = useRouter();
+  useCapacitorBackButton();
   const { showOnboarding, completeOnboarding, resetOnboarding } =
     useOnboardingState();
   const [forceShowOnboarding, setForceShowOnboarding] = useState(false);

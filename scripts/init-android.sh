@@ -8,10 +8,10 @@ echo "📦 Installing mobile dependencies..."
 cd mobile
 npm install
 
-# 2. Build the web app
+# 2. Build the web app as a static export for Capacitor
 echo "🏗️ Building web app (Static Export)..."
 cd ..
-npm run build
+CAPACITOR_BUILD=true npm run build
 
 # 3. Add Android platform if it doesn't exist
 if [ ! -d "mobile/android" ]; then

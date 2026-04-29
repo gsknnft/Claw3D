@@ -3,7 +3,6 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
-  // If you use basePath or other specific routing, we might need to adjust this for Capacitor
 const securityHeaders = [
   {
     key: "Content-Security-Policy",
@@ -15,14 +14,9 @@ const securityHeaders = [
       "img-src 'self' data: blob: http: https:",
       "font-src 'self' data: https:",
       "style-src 'self' 'unsafe-inline' https:",
-      // 'unsafe-eval' is required by Next.js dev mode (source maps, HMR).
-      // In production it is dropped — React and Three.js do not need eval.
       ...(process.env.NODE_ENV !== "production"
         ? ["script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:"]
         : ["script-src 'self' 'unsafe-inline' blob:"]),
-      // connect-src is intentionally broad: gateway URLs are user-configured
-      // at runtime and cannot be enumerated at build time.
-      // Restrict further when a fixed deployment target is known.
       "connect-src 'self' ws: wss: http: https:",
       "media-src 'self' blob: data: http: https:",
       "worker-src 'self' blob:",
@@ -59,12 +53,25 @@ if (process.env.NODE_ENV === "production") {
   });
 }
 
+// Set CAPACITOR_BUILD=true for `next build` when producing the static bundle
+// for Capacitor (mobile). Regular web/desktop builds must NOT set this — API
+// routes are disabled in static export mode.
+const isCapacitorBuild = process.env.CAPACITOR_BUILD === "true";
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  ...(isCapacitorBuild
+    ? {
+        output: "export",
+        images: { unoptimized: true },
+      }
+    : {}),
   turbopack: {
     root: path.resolve(__dirname),
   },
   async headers() {
+    // Headers are not used in static export ('out' folder),
+    // but kept here for dev mode consistency.
     return [
       {
         source: "/:path*",

@@ -1,14 +1,17 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  GatewayBrowserClient,
-  clearGatewayBrowserSessionStorage,
-  type GatewayHelloOk,
-} from "./openclaw/GatewayBrowserClient";
+import { GatewayResponseError } from "@/lib/gateway/errors";
+import { ensureGatewayReloadModeHotForLocalStudio } from "@/lib/gateway/gatewayReloadMode";
+import { isLocalGatewayUrl } from "@/lib/gateway/local-gateway";
+import { resolveStudioProxyGatewayUrl } from "@/lib/gateway/proxy-url";
+import { probeCustomRuntime } from "@/lib/runtime/custom/http";
 import type {
-  StudioGatewayProfilePublic,
+  StudioSettingsLoadOptions,
+  StudioSettingsResponse,
+} from "@/lib/studio/coordinator";
+import type {
   StudioGatewayAdapterType,
+  StudioGatewayProfilePublic,
   StudioGatewaySettings,
   StudioSettings,
   StudioSettingsPatch,
@@ -18,18 +21,19 @@ import {
   resolveDefaultStudioGatewayProfile,
   resolveStudioGatewayProfiles,
 } from "@/lib/studio/settings";
-import type {
-  StudioSettingsLoadOptions,
-  StudioSettingsResponse,
-} from "@/lib/studio/coordinator";
-import { resolveStudioProxyGatewayUrl } from "@/lib/gateway/proxy-url";
-import { ensureGatewayReloadModeHotForLocalStudio } from "@/lib/gateway/gatewayReloadMode";
-import { isLocalGatewayUrl } from "@/lib/gateway/local-gateway";
-import { GatewayResponseError } from "@/lib/gateway/errors";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  GatewayBrowserClient,
+  clearGatewayBrowserSessionStorage,
+  type GatewayHelloOk,
+} from "./openclaw/GatewayBrowserClient";
 
 const gatewayDebugEnabled = process.env.NODE_ENV !== "production";
 
-const gatewayDebugLog = (message: string, details?: Record<string, unknown>) => {
+const gatewayDebugLog = (
+  message: string,
+  details?: Record<string, unknown>,
+) => {
   if (!gatewayDebugEnabled) return;
   if (details) {
     console.info("[gateway-client]", message, details);
@@ -37,7 +41,6 @@ const gatewayDebugLog = (message: string, details?: Record<string, unknown>) => 
   }
   console.info("[gateway-client]", message);
 };
-import { probeCustomRuntime } from "@/lib/runtime/custom/http";
 
 export type ReqFrame = {
   type: "req";
@@ -89,7 +92,9 @@ export const buildAgentMainSessionKey = (agentId: string, mainKey: string) => {
   return `agent:${trimmedAgent}:${trimmedKey}`;
 };
 
-export const parseAgentIdFromSessionKey = (sessionKey: string): string | null => {
+export const parseAgentIdFromSessionKey = (
+  sessionKey: string,
+): string | null => {
   const match = sessionKey.match(/^agent:([^:]+):/);
   return match ? match[1] : null;
 };
@@ -104,7 +109,7 @@ const CONNECT_FAILED_CLOSE_CODE = 4008;
 const GATEWAY_CONNECT_TIMEOUT_MS = 13_000;
 
 const parseConnectFailedCloseReason = (
-  reason: string
+  reason: string,
 ): { code: string; message: string } | null => {
   const trimmed = reason.trim();
   if (!trimmed.toLowerCase().startsWith("connect failed:")) return null;
@@ -125,11 +130,13 @@ const OPENCLAW_CONTROL_UI_CLIENT_ID = "openclaw-control-ui";
 const OPENCLAW_WEBCHAT_UI_CLIENT_ID = "webchat-ui";
 
 const isAutoManagedAdapter = (adapterType: StudioGatewayAdapterType) =>
-  adapterType === "openclaw" || adapterType === "hermes" || adapterType === "demo";
+  adapterType === "openclaw" ||
+  adapterType === "hermes" ||
+  adapterType === "demo";
 
 export const resolveGatewayClientName = (
   adapterType: StudioGatewayAdapterType,
-  gatewayUrl: string
+  gatewayUrl: string,
 ) => {
   if (adapterType !== "openclaw") {
     return OPENCLAW_CONTROL_UI_CLIENT_ID;
@@ -140,7 +147,7 @@ export const resolveGatewayClientName = (
 };
 
 export const resolveInitialGatewayAutoConnectDelayMs = (
-  adapterType: StudioGatewayAdapterType
+  adapterType: StudioGatewayAdapterType,
 ): number => {
   switch (adapterType) {
     case "hermes":
@@ -154,7 +161,7 @@ export const resolveInitialGatewayAutoConnectDelayMs = (
 
 export const resolveInitialGatewayConnectAttemptCount = (
   adapterType: StudioGatewayAdapterType,
-  hasConnectedOnce: boolean
+  hasConnectedOnce: boolean,
 ): number => {
   switch (adapterType) {
     case "hermes":
@@ -167,7 +174,9 @@ export const resolveInitialGatewayConnectAttemptCount = (
   }
 };
 
-const normalizeLocalGatewayDefaults = (value: unknown): StudioGatewaySettings | null => {
+const normalizeLocalGatewayDefaults = (
+  value: unknown,
+): StudioGatewaySettings | null => {
   if (!value || typeof value !== "object") return null;
   const raw = value as {
     url?: unknown;
@@ -198,7 +207,7 @@ const normalizeLocalGatewayDefaults = (value: unknown): StudioGatewaySettings | 
 };
 
 const normalizeGatewayProfilePublic = (
-  value: unknown
+  value: unknown,
 ): { url: string; token: string } | null => {
   if (!value || typeof value !== "object") return null;
   const raw = value as { url?: unknown };
@@ -208,12 +217,26 @@ const normalizeGatewayProfilePublic = (
 };
 
 const normalizeGatewayProfilesPublic = (
-  value: unknown
-): Partial<Record<StudioGatewayAdapterType, { url: string; token: string }>> | undefined => {
+  value: unknown,
+):
+  | Partial<Record<StudioGatewayAdapterType, { url: string; token: string }>>
+  | undefined => {
   if (!value || typeof value !== "object") return undefined;
-  const raw = value as Partial<Record<StudioGatewayAdapterType, StudioGatewayProfilePublic>>;
-  const profiles: Partial<Record<StudioGatewayAdapterType, { url: string; token: string }>> = {};
-  for (const adapterType of ["openclaw", "hermes", "demo", "local", "claw3d", "paperclip", "custom"] as const) {
+  const raw = value as Partial<
+    Record<StudioGatewayAdapterType, StudioGatewayProfilePublic>
+  >;
+  const profiles: Partial<
+    Record<StudioGatewayAdapterType, { url: string; token: string }>
+  > = {};
+  for (const adapterType of [
+    "openclaw",
+    "hermes",
+    "demo",
+    "local",
+    "claw3d",
+    "paperclip",
+    "custom",
+  ] as const) {
     const profile = normalizeGatewayProfilePublic(raw[adapterType]);
     if (profile) {
       profiles[adapterType] = profile;
@@ -251,7 +274,7 @@ export class GatewayClient {
   private status: GatewayStatus = "disconnected";
   private pendingConnect: Promise<void> | null = null;
   private resolveConnect: (() => void) | null = null;
-  private rejectConnect: (() => void) | null = null;
+  private rejectConnect: ((err?: Error) => void) | null = null;
   private manualDisconnect = false;
   private lastHello: GatewayHelloOk | null = null;
   private _lastDisconnectCode: number | null = null;
@@ -315,7 +338,9 @@ export class GatewayClient {
         if (this.client !== nextClient) return;
         this._lastDisconnectCode = code;
         const connectFailed =
-          code === CONNECT_FAILED_CLOSE_CODE ? parseConnectFailedCloseReason(reason) : null;
+          code === CONNECT_FAILED_CLOSE_CODE
+            ? parseConnectFailedCloseReason(reason)
+            : null;
         const err = connectFailed
           ? new GatewayResponseError({
               code: connectFailed.code,
@@ -354,8 +379,8 @@ export class GatewayClient {
           connectTimeoutId = window.setTimeout(() => {
             reject(
               new Error(
-                "Timed out connecting to the gateway. Check that it is running, or change the gateway address and try again."
-              )
+                "Timed out connecting to the gateway. Check that it is running, or change the gateway address and try again.",
+              ),
             );
           }, GATEWAY_CONNECT_TIMEOUT_MS);
         }),
@@ -439,10 +464,14 @@ export const isGatewayDisconnectLikeError = (err: unknown): boolean => {
   return Number.isFinite(code) && code === 1012;
 };
 
-const WEBCHAT_SESSION_MUTATION_BLOCKED_RE = /webchat clients cannot (patch|delete) sessions/i;
-const WEBCHAT_SESSION_MUTATION_HINT_RE = /use chat\.send for session-scoped updates/i;
+const WEBCHAT_SESSION_MUTATION_BLOCKED_RE =
+  /webchat clients cannot (patch|delete) sessions/i;
+const WEBCHAT_SESSION_MUTATION_HINT_RE =
+  /use chat\.send for session-scoped updates/i;
 
-export const isWebchatSessionMutationBlockedError = (error: unknown): boolean => {
+export const isWebchatSessionMutationBlockedError = (
+  error: unknown,
+): boolean => {
   if (!(error instanceof GatewayResponseError)) return false;
   if (error.code.trim().toUpperCase() !== "INVALID_REQUEST") return false;
   const message = error.message.trim();
@@ -527,7 +556,10 @@ export const syncGatewaySessionSettings = async ({
   if (includeExecAsk) {
     payload.execAsk = execAsk ?? null;
   }
-  return await client.call<GatewaySessionsPatchResult>("sessions.patch", payload);
+  return await client.call<GatewaySessionsPatchResult>(
+    "sessions.patch",
+    payload,
+  );
 };
 
 const doctorFixHint =
@@ -574,7 +606,10 @@ const formatGatewayError = (error: unknown) => {
     if (isGatewayProtocolMismatchError(error)) {
       return `Gateway error (${error.code}): ${error.message}. ${protocolMismatchHint}`;
     }
-    if (error.code === "INVALID_REQUEST" && /invalid config/i.test(error.message)) {
+    if (
+      error.code === "INVALID_REQUEST" &&
+      /invalid config/i.test(error.message)
+    ) {
       return `Gateway error (${error.code}): ${error.message}. ${doctorFixHint}`;
     }
     if (error.code === "studio.upstream_timeout") {
@@ -613,7 +648,9 @@ export type GatewayConnectionState = {
   selectedAdapterType: StudioGatewayAdapterType;
   detectedAdapterType: StudioGatewayAdapterType | null;
   activeAdapterType: StudioGatewayAdapterType;
-  adapterProfiles: Partial<Record<StudioGatewayAdapterType, { url: string; token: string }>>;
+  adapterProfiles: Partial<
+    Record<StudioGatewayAdapterType, { url: string; token: string }>
+  >;
   localGatewayDefaults: StudioGatewaySettings | null;
   error: string | null;
   connectPromptReady: boolean;
@@ -694,7 +731,8 @@ export const resolveGatewayAutoRetryDelayMs = (params: {
   if (!params.gatewayUrl.trim()) return null;
   if (params.attempt >= MAX_AUTO_RETRY_ATTEMPTS) return null;
   if (isNonRetryableConnectErrorCode(params.connectErrorCode)) return null;
-  if (params.connectErrorCode === null && isAuthError(params.errorMessage)) return null;
+  if (params.connectErrorCode === null && isAuthError(params.errorMessage))
+    return null;
 
   const baseDelay =
     params.lastDisconnectCode === WS_CLOSE_POLICY_VIOLATION
@@ -703,12 +741,12 @@ export const resolveGatewayAutoRetryDelayMs = (params: {
 
   return Math.min(
     baseDelay * Math.pow(1.5, params.attempt),
-    MAX_RETRY_DELAY_MS
+    MAX_RETRY_DELAY_MS,
   );
 };
 
 export const useGatewayConnection = (
-  settingsCoordinator: StudioSettingsCoordinatorLike
+  settingsCoordinator: StudioSettingsCoordinatorLike,
 ): GatewayConnectionState => {
   const [client] = useState(() => new GatewayClient());
   const didAutoConnect = useRef(false);
@@ -717,7 +755,9 @@ export const useGatewayConnection = (
     gatewayUrl: string;
     token: string;
     adapterType: StudioGatewayAdapterType;
-    profiles?: Partial<Record<StudioGatewayAdapterType, { url: string; token: string }>>;
+    profiles?: Partial<
+      Record<StudioGatewayAdapterType, { url: string; token: string }>
+    >;
     hasLastKnownGood: boolean;
   } | null>(null);
   const retryAttemptRef = useRef(0);
@@ -734,9 +774,8 @@ export const useGatewayConnection = (
   >({});
   const [detectedAdapterType, setDetectedAdapterType] =
     useState<StudioGatewayAdapterType | null>(null);
-  const [localGatewayDefaults, setLocalGatewayDefaults] = useState<StudioGatewaySettings | null>(
-    null
-  );
+  const [localGatewayDefaults, setLocalGatewayDefaults] =
+    useState<StudioGatewaySettings | null>(null);
   const [status, setStatus] = useState<GatewayStatus>("disconnected");
   const [error, setError] = useState<string | null>(null);
   const [connectErrorCode, setConnectErrorCode] = useState<string | null>(null);
@@ -746,23 +785,25 @@ export const useGatewayConnection = (
     (value: StudioGatewayAdapterType) => {
       setSelectedAdapterTypeState(value);
       const profile =
-        adapterProfiles[value] ?? resolveDefaultStudioGatewayProfile(value, localGatewayDefaults);
+        adapterProfiles[value] ??
+        resolveDefaultStudioGatewayProfile(value, localGatewayDefaults);
       setGatewayUrl(profile.url ?? "");
       // Prefer the token from the initial private settings load when the in-memory
       // profile has an empty token (e.g. the profile was populated from the sanitized
       // public API response which strips real token values).
-      const loadedToken = loadedGatewaySettings.current?.profiles?.[value]?.token ?? "";
+      const loadedToken =
+        loadedGatewaySettings.current?.profiles?.[value]?.token ?? "";
       setToken(profile.token || loadedToken);
       const loaded = loadedGatewaySettings.current;
       const nextHasLastKnownGood = Boolean(
         (loaded?.adapterType === value && loaded.hasLastKnownGood) ||
-          loaded?.profiles?.[value]?.url?.trim()
+        loaded?.profiles?.[value]?.url?.trim(),
       );
       setHasLastKnownGoodState(nextHasLastKnownGood);
       setError(null);
       setConnectErrorCode(null);
     },
-    [adapterProfiles, localGatewayDefaults]
+    [adapterProfiles, localGatewayDefaults],
   );
 
   useEffect(() => {
@@ -773,7 +814,9 @@ export const useGatewayConnection = (
           typeof settingsCoordinator.loadSettingsEnvelope === "function"
             ? await settingsCoordinator.loadSettingsEnvelope({ force: true })
             : {
-                settings: await settingsCoordinator.loadSettings({ force: true }),
+                settings: await settingsCoordinator.loadSettings({
+                  force: true,
+                }),
                 localGatewayDefaults: null,
                 gatewayPrivate: null,
                 localGatewayDefaultsPrivate: null,
@@ -795,7 +838,10 @@ export const useGatewayConnection = (
         const nextAdapterType = resolvedGatewayProfiles.selectedAdapterType;
         const selectedProfile =
           resolvedGatewayProfiles.activeProfile ??
-          resolveDefaultStudioGatewayProfile(nextAdapterType, normalizedDefaults);
+          resolveDefaultStudioGatewayProfile(
+            nextAdapterType,
+            normalizedDefaults,
+          );
         const nextGatewayUrl = selectedProfile.url ?? "";
         const nextToken = selectedProfile.token ?? "";
         loadedGatewaySettings.current = {
@@ -803,16 +849,23 @@ export const useGatewayConnection = (
           token: nextToken,
           adapterType: nextAdapterType,
           profiles: resolvedGatewayProfiles.profiles,
-          hasLastKnownGood: Boolean(resolvedGatewayProfiles.lastKnownGoodForSelected?.url),
+          hasLastKnownGood: Boolean(
+            resolvedGatewayProfiles.lastKnownGoodForSelected?.url,
+          ),
         };
         setGatewayUrl(nextGatewayUrl);
         setToken(nextToken);
         setSelectedAdapterTypeState(nextAdapterType);
         setAdapterProfiles(resolvedGatewayProfiles.profiles);
-        setHasLastKnownGoodState(Boolean(resolvedGatewayProfiles.lastKnownGoodForSelected?.url));
+        setHasLastKnownGoodState(
+          Boolean(resolvedGatewayProfiles.lastKnownGoodForSelected?.url),
+        );
       } catch (err) {
         if (!cancelled) {
-          const message = err instanceof Error ? err.message : "Failed to load gateway settings.";
+          const message =
+            err instanceof Error
+              ? err.message
+              : "Failed to load gateway settings.";
           setError(message);
         }
       } finally {
@@ -915,19 +968,24 @@ export const useGatewayConnection = (
       await settingsCoordinator.flushPending();
       const maxAttempts = resolveInitialGatewayConnectAttemptCount(
         selectedAdapterType,
-        hasConnectedOnceRef.current
+        hasConnectedOnceRef.current,
       );
       let lastError: unknown = null;
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         try {
           const isNative = (window as any).Capacitor?.isNative;
-          const connectUrl = isNative ? gatewayUrl : resolveStudioProxyGatewayUrl();
+          const connectUrl = isNative
+            ? gatewayUrl
+            : resolveStudioProxyGatewayUrl();
 
           await client.connect({
             gatewayUrl: connectUrl,
             token,
             authScopeKey: gatewayUrl,
-            clientName: resolveGatewayClientName(selectedAdapterType, gatewayUrl),
+            clientName: resolveGatewayClientName(
+              selectedAdapterType,
+              gatewayUrl,
+            ),
             disableDeviceAuth: selectedAdapterType !== "openclaw",
           });
           lastError = null;
@@ -968,21 +1026,26 @@ export const useGatewayConnection = (
       setDetectedAdapterType(nextDetectedAdapterType);
       setHasLastKnownGoodState(nextDetectedAdapterType === selectedAdapterType);
       // Flush immediately (debounce=0) so lastKnownGood survives a quick refresh.
-      settingsCoordinator.schedulePatch({
-        gateway: {
-          lastKnownGood: {
-            url: gatewayUrl.trim(),
-            token: token || undefined,
-            adapterType: nextDetectedAdapterType,
+      settingsCoordinator.schedulePatch(
+        {
+          gateway: {
+            lastKnownGood: {
+              url: gatewayUrl.trim(),
+              token: token || undefined,
+              adapterType: nextDetectedAdapterType,
+            },
           },
         },
-      }, 0);
+        0,
+      );
       gatewayDebugLog("connect:success", {
         selectedAdapterType,
         detectedAdapterType: nextDetectedAdapterType,
       });
     } catch (err) {
-      setConnectErrorCode(err instanceof GatewayResponseError ? err.code : null);
+      setConnectErrorCode(
+        err instanceof GatewayResponseError ? err.code : null,
+      );
       setError(formatGatewayError(err));
       gatewayDebugLog("connect:failed", {
         selectedAdapterType,
@@ -999,7 +1062,8 @@ export const useGatewayConnection = (
     if (!gatewayUrl.trim()) return;
     if (!isAutoManagedAdapter(selectedAdapterType)) return;
     didAutoConnect.current = true;
-    const delayMs = resolveInitialGatewayAutoConnectDelayMs(selectedAdapterType);
+    const delayMs =
+      resolveInitialGatewayAutoConnectDelayMs(selectedAdapterType);
     gatewayDebugLog("auto-connect", {
       selectedAdapterType,
       gatewayUrl,
@@ -1015,7 +1079,13 @@ export const useGatewayConnection = (
         autoConnectTimerRef.current = null;
       }
     };
-  }, [connect, gatewayUrl, hasLastKnownGoodState, selectedAdapterType, settingsLoaded]);
+  }, [
+    connect,
+    gatewayUrl,
+    hasLastKnownGoodState,
+    selectedAdapterType,
+    settingsLoaded,
+  ]);
 
   // Auto-retry on disconnect (gateway busy, network blip, etc.)
   useEffect(() => {
@@ -1058,7 +1128,14 @@ export const useGatewayConnection = (
         retryTimerRef.current = null;
       }
     };
-  }, [connect, connectErrorCode, error, gatewayUrl, selectedAdapterType, status]);
+  }, [
+    connect,
+    connectErrorCode,
+    error,
+    gatewayUrl,
+    selectedAdapterType,
+    status,
+  ]);
 
   // Reset retry count after the connection has been stable for a minimum
   // duration.  If the upstream drops the connection quickly (e.g. within a
@@ -1130,37 +1207,16 @@ export const useGatewayConnection = (
           profiles: nextProfiles,
         },
       },
-      400
+      400,
     );
-  }, [adapterProfiles, gatewayUrl, selectedAdapterType, settingsCoordinator, settingsLoaded, token]);
-
-  // Register Android back button listener
-  useEffect(() => {
-    const Capacitor = (window as any).Capacitor;
-    if (!Capacitor?.isNative) return;
-
-    let backListener: any = null;
-
-    const setupListener = async () => {
-      const { App } = await import("@capacitor/app");
-      backListener = await App.addListener("backButton", (data) => {
-        if (!data.canGoBack) {
-          // If we can't go back, maybe exit the app or do nothing
-          return;
-        }
-        // Basic back logic - you might want to expand this to close modals
-        window.history.back();
-      });
-    };
-
-    setupListener();
-
-    return () => {
-      if (backListener) {
-        backListener.remove();
-      }
-    };
-  }, []);
+  }, [
+    adapterProfiles,
+    gatewayUrl,
+    selectedAdapterType,
+    settingsCoordinator,
+    settingsLoaded,
+    token,
+  ]);
 
   const useLocalGatewayDefaults = useCallback(() => {
     if (!localGatewayDefaults) {
@@ -1214,7 +1270,9 @@ export const useGatewayConnection = (
 
   const connectPromptReady = settingsLoaded;
   const activeAdapterType =
-    status === "connected" ? detectedAdapterType ?? selectedAdapterType : selectedAdapterType;
+    status === "connected"
+      ? (detectedAdapterType ?? selectedAdapterType)
+      : selectedAdapterType;
   const shouldPromptForConnect =
     settingsLoaded &&
     status !== "connected" &&

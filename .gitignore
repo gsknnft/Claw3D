@@ -89,5 +89,8 @@ test-results
 
 #Ignore cursor AI rules
 .cursor/rules/codacy.mdc
-# WIP
-mobile
+
+# mobile — local build artifacts (Capacitor syncs these from npm install)
+mobile/node_modules/
+mobile/package-lock.json
+mobile/.gradle/

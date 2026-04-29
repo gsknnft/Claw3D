@@ -43,27 +43,10 @@ const normalizeQuery = (query: string): string => {
 };
 
 const resolveRealPath = (value: string): string => {
-  const absolutePath = path.resolve(value);
   try {
-    return fs.realpathSync(absolutePath);
+    return fs.realpathSync(value);
   } catch {
-    const missingSegments: string[] = [];
-    let currentPath = absolutePath;
-    while (true) {
-      if (fs.existsSync(currentPath)) {
-        try {
-          return path.join(fs.realpathSync(currentPath), ...missingSegments.reverse());
-        } catch {
-          return path.join(currentPath, ...missingSegments.reverse());
-        }
-      }
-      const parentPath = path.dirname(currentPath);
-      if (parentPath === currentPath) {
-        return absolutePath;
-      }
-      missingSegments.push(path.basename(currentPath));
-      currentPath = parentPath;
-    }
+    return path.resolve(value);
   }
 };
 
