@@ -87,6 +87,7 @@ test-results
 .certs/
 .understand-anything/
 
-
 #Ignore cursor AI rules
 .cursor/rules/codacy.mdc
+# WIP
+mobile

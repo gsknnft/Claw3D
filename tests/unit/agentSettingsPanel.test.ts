@@ -1189,6 +1189,7 @@ describe("AgentSettingsPanel", () => {
     expect(screen.queryByRole("button", { name: "Open Full Control UI" })).not.toBeInTheDocument();
   });
 
+
   it("keeps_delete_agent_action_for_hermes_in_advanced_mode", () => {
     render(
       createElement(AgentSettingsPanel, {

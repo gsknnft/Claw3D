@@ -198,4 +198,42 @@ describe("loadLocalGatewayDefaults with CLAW3D_GATEWAY_URL", () => {
       },
     });
   });
+
+  it("uses CLAW3D_GATEWAY_ADAPTER_TYPE for Hermes env defaults", async () => {
+    process.env.CLAW3D_GATEWAY_URL = "ws://my-hermes:18789";
+    process.env.CLAW3D_GATEWAY_ADAPTER_TYPE = "hermes";
+    delete process.env.CLAW3D_GATEWAY_TOKEN;
+    process.env.OPENCLAW_STATE_DIR = "/tmp/claw3d-test-nonexistent-" + Date.now();
+    const { loadLocalGatewayDefaults } = await import(
+      "../../src/lib/studio/settings-store"
+    );
+    const result = loadLocalGatewayDefaults();
+    expect(result).toEqual({
+      url: "ws://my-hermes:18789",
+      token: "",
+      adapterType: "hermes",
+      profiles: {
+        hermes: { url: "ws://my-hermes:18789", token: "" },
+      },
+    });
+  });
+
+  it("exposes local Hermes adapter defaults when only HERMES_ADAPTER_PORT is set", async () => {
+    delete process.env.CLAW3D_GATEWAY_URL;
+    delete process.env.CLAW3D_GATEWAY_TOKEN;
+    process.env.HERMES_ADAPTER_PORT = "19444";
+    process.env.OPENCLAW_STATE_DIR = "/tmp/claw3d-test-nonexistent-" + Date.now();
+    const { loadLocalGatewayDefaults } = await import(
+      "../../src/lib/studio/settings-store"
+    );
+    const result = loadLocalGatewayDefaults();
+    expect(result).toEqual({
+      url: "ws://localhost:19444",
+      token: "",
+      adapterType: "hermes",
+      profiles: {
+        hermes: { url: "ws://localhost:19444", token: "" },
+      },
+    });
+  });
 });

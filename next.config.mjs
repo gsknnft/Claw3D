@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 
+  // If you use basePath or other specific routing, we might need to adjust this for Capacitor
 const securityHeaders = [
   {
     key: "Content-Security-Policy",

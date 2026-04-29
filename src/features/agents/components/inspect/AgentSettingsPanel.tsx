@@ -800,7 +800,7 @@ export const AgentSettingsPanel = ({
           </section>
         ) : null}
 
-        {mode === "advanced" ? (
+        {mode === "advanced" && isOpenClawRuntime ? (
           <>
             {isOpenClawRuntime ? (
               <section className="sidebar-section mt-8" data-testid="agent-settings-control-ui">

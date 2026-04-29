@@ -19,7 +19,8 @@
     "smoke:dev-server": "node scripts/smoke-dev-server.mjs",
     "typecheck": "tsc --noEmit",
     "test": "vitest",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "build:mobile": "next build && cd mobile && npx cap sync"
   },
   "dependencies": {
     "@noble/ed25519": "^3.0.0",
