@@ -7,6 +7,7 @@ Claw3D now treats runtime backends as named saved profiles instead of one global
 - `openclaw`
 - `hermes`
 - `demo`
+- `webllm` (planned)
 - `local`
 - `claw3d`
 - `custom`
@@ -50,6 +51,16 @@ Typical URL:
 ```text
 ws://localhost:18789
 ```
+
+### `webllm` (planned)
+
+A browser/WebView-local runtime profile for the shippable no-backend demo.
+
+This profile should lazy-load WebLLM, cache a small model through the browser
+runtime, and expose one local demo agent through the existing runtime provider
+seam. It should not require a WebSocket gateway.
+
+See [on-device-ai.md](on-device-ai.md).
 
 ### `local`
 

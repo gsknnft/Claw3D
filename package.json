@@ -20,11 +20,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest",
     "e2e": "playwright test",
-    "build:mobile": "next build && cd mobile && npx cap sync"
+    "build:android": "CAPACITOR_BUILD=true next build && cd mobile && npm install && npx cap sync",
+    "android:sync": "cd mobile && npx cap sync",
+    "android:open": "cd mobile && npx cap open android"
   },
   "dependencies": {
-    "@capacitor/app": "^8.1.0",
-    "@capacitor/android": "8.3.1",
     "@noble/ed25519": "^3.0.0",
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",

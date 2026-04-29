@@ -14,12 +14,18 @@ This file captures the near-term direction for Claw3D so outside contributors ca
 - Replace or fully clear unresolved bundled assets and dependency licensing risks.
 - Improve security posture around Studio access bootstrap and runtime token handling.
 - Expand runtime profiles from the new shared `agents.message` / `agents.handoff` contract into fuller provider adapters and richer multi-agent handoff flows.
+- Add **On-Device AI** as a WebLLM-backed runtime profile for a real no-backend
+  demo agent.
+- Fix remote office behavior on native APKs so `openclaw_gateway` can use a
+  direct device-to-gateway connection instead of a server-side API route.
 
 ## Later
 
 - Broader office authoring workflows and richer world-building tools.
 - Better contributor automation, release process, and publication tooling.
 - More immersive agent/system surfaces that build on the existing office intent and runtime event model.
+- Native BitNet inference through an Android plugin once the WebLLM/runtime
+  profile path has proven the UX.
 
 ## Product Ideas To Reduce OpenClaw Dependency
 

@@ -141,6 +141,11 @@ export const resolveGatewayClientName = (
   if (adapterType !== "openclaw") {
     return OPENCLAW_CONTROL_UI_CLIENT_ID;
   }
+  // On native we always connect directly (no server proxy), so always
+  // identify as a control UI regardless of the gateway's network address.
+  const isNative =
+    typeof window !== "undefined" && !!(window as any).Capacitor?.isNative;
+  if (isNative) return OPENCLAW_CONTROL_UI_CLIENT_ID;
   return isLocalGatewayUrl(gatewayUrl)
     ? OPENCLAW_CONTROL_UI_CLIENT_ID
     : OPENCLAW_WEBCHAT_UI_CLIENT_ID;

@@ -5,12 +5,7 @@ import { NextResponse } from "next/server";
 
 import { resolveStateDir } from "@/lib/clawdbot/paths";
 
-// Required for Next.js static export compatibility
-export const dynamic = 'force-static';
-
-export async function generateStaticParams() {
-  return []; // No files at build time
-}
+export const runtime = "nodejs";
 
 const uploadsDir = () => path.join(resolveStateDir(), "claw3d", "uploads");
 
@@ -42,25 +37,27 @@ const contentTypeFromName = (fileName: string): string => {
 
 export async function GET(
   _request: Request,
-  context: { params: Promise<{ file: string }> }
+  { params }: { params: Promise<{ file: string }> }
 ) {
-  // In static export, this function is called at build time.
-  // On the device, this code never runs.
   try {
-    const { file } = await context.params;
-    if (!file) return NextResponse.json({ error: "Missing file." }, { status: 400 });
-
+    const { file } = await params;
     const safeFile = path.basename(file);
     const targetPath = path.join(uploadsDir(), safeFile);
-    const bytes = await fs.readFile(targetPath);
+    const resolvedUploads = path.resolve(uploadsDir());
+    const resolvedTarget = path.resolve(targetPath);
+    if (!resolvedTarget.startsWith(`${resolvedUploads}${path.sep}`) && resolvedTarget !== resolvedUploads) {
+      return NextResponse.json({ error: "Invalid file path." }, { status: 400 });
+    }
 
+    const bytes = await fs.readFile(resolvedTarget);
     return new Response(new Blob([Uint8Array.from(bytes)], { type: contentTypeFromName(safeFile) }), {
       headers: {
         "Content-Type": contentTypeFromName(safeFile),
         "Cache-Control": "no-store",
       },
     });
-  } catch {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "File not found.";
+    return NextResponse.json({ error: message }, { status: 404 });
   }
 }

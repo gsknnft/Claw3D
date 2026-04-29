@@ -532,15 +532,97 @@ export const updateStudioSettings = async (
   });
 };
 
+// ---------------------------------------------------------------------------
+// Native (Capacitor) localStorage transport
+// On standalone APK builds there is no server, so /api/studio doesn't exist.
+// Settings are persisted to localStorage keyed by NATIVE_SETTINGS_LS_KEY.
+// ---------------------------------------------------------------------------
+
+const NATIVE_SETTINGS_LS_KEY = "claw3d:studio:settings";
+
+const emptyNativeEnvelope = (): StudioSettingsResponse => ({
+  settings: {} as StudioSettingsPublic,
+  localGatewayDefaults: null,
+  gatewayPrivate: null,
+  localGatewayDefaultsPrivate: null,
+});
+
+const deepMergeObjects = (
+  base: Record<string, unknown>,
+  patch: Record<string, unknown>,
+): Record<string, unknown> => {
+  const result: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(patch)) {
+    if (value === null || value === undefined) {
+      result[key] = value;
+    } else if (
+      typeof value === "object" &&
+      !Array.isArray(value) &&
+      typeof result[key] === "object" &&
+      result[key] !== null &&
+      !Array.isArray(result[key])
+    ) {
+      result[key] = deepMergeObjects(
+        result[key] as Record<string, unknown>,
+        value as Record<string, unknown>,
+      );
+    } else {
+      result[key] = value;
+    }
+  }
+  return result;
+};
+
+const readNativeSettingsRaw = (): Record<string, unknown> => {
+  try {
+    if (typeof window === "undefined") return {};
+    const raw = window.localStorage.getItem(NATIVE_SETTINGS_LS_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+};
+
+const writeNativeSettingsRaw = (data: Record<string, unknown>): void => {
+  try {
+    if (typeof window === "undefined") return;
+    window.localStorage.setItem(NATIVE_SETTINGS_LS_KEY, JSON.stringify(data));
+  } catch {
+    // Storage quota exceeded or unavailable — ignore.
+  }
+};
+
+export const fetchNativeSettings = async (): Promise<StudioSettingsResponse> => {
+  const stored = readNativeSettingsRaw();
+  return {
+    ...emptyNativeEnvelope(),
+    settings: stored as StudioSettingsPublic,
+  };
+};
+
+export const updateNativeSettings = async (
+  patch: StudioSettingsPatch
+): Promise<StudioSettingsResponse> => {
+  const current = readNativeSettingsRaw();
+  const merged = deepMergeObjects(current, patch as Record<string, unknown>);
+  writeNativeSettingsRaw(merged);
+  return {
+    ...emptyNativeEnvelope(),
+    settings: merged as StudioSettingsPublic,
+  };
+};
+
 export const createStudioSettingsCoordinator = (options?: {
   debounceMs?: number;
   cacheTtlMs?: number;
 }): StudioSettingsCoordinator => {
+  const isNative =
+    typeof window !== "undefined" && !!(window as any).Capacitor?.isNative;
+  const transport: StudioSettingsCoordinatorTransport = isNative
+    ? { fetchSettings: fetchNativeSettings, updateSettings: updateNativeSettings }
+    : { fetchSettings: fetchStudioSettings, updateSettings: updateStudioSettings };
   return new StudioSettingsCoordinator(
-    {
-      fetchSettings: fetchStudioSettings,
-      updateSettings: updateStudioSettings,
-    },
+    transport,
     options?.debounceMs,
     options?.cacheTtlMs,
   );
