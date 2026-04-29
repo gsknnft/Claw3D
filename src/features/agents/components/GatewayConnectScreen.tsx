@@ -53,7 +53,8 @@ export const GatewayConnectScreen = ({
     selectedAdapterType === "local" ||
     selectedAdapterType === "claw3d" ||
     selectedAdapterType === "paperclip" ||
-    selectedAdapterType === "custom";
+    selectedAdapterType === "custom" ||
+    selectedAdapterType === "webllm";
   const isLocal = useMemo(() => isLocalGatewayUrl(gatewayUrl), [gatewayUrl]);
   const localPort = useMemo(() => resolveLocalGatewayPort(gatewayUrl), [gatewayUrl]);
   const localGatewayCommand = useMemo(
@@ -89,6 +90,9 @@ export const GatewayConnectScreen = ({
   const useClaw3dPreset = () => {
     onAdapterTypeChange("claw3d");
   };
+  const useWebLLMPreset = () => {
+    onAdapterTypeChange("webllm");
+  };
   const statusCopy = useMemo(() => {
     if (status === "connecting" && isLocal) {
       return `Local gateway detected on port ${localPort}. Connecting…`;
@@ -113,6 +117,8 @@ export const GatewayConnectScreen = ({
         return "Local runtime expects a direct HTTP runtime/orchestrator boundary, not a provider catalog.";
       case "claw3d":
         return "Claw3D runtime preserves Claw3D transcript conventions over the direct runtime seam.";
+      case "webllm":
+        return "On-Device AI runs a small language model directly in your browser using WebGPU. No backend or internet connection required after the model downloads. Requires Chrome or Edge on a modern device.";
       case "custom":
       default:
         return "Custom is the generic direct runtime seam. Use it for compatible orchestrators, not for provider-specific auth flows.";
@@ -282,6 +288,13 @@ export const GatewayConnectScreen = ({
             {selectedAdapterHint}
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              type="button"
+              className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"
+              onClick={useWebLLMPreset}
+            >
+              On-Device AI
+            </button>
             <button
               type="button"
               className="ui-btn-secondary px-3 py-1.5 text-[11px] font-semibold tracking-[0.05em]"

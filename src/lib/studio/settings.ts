@@ -38,7 +38,8 @@ export type StudioGatewayAdapterType =
   | "local"
   | "claw3d"
   | "paperclip"
-  | "custom";
+  | "custom"
+  | "webllm";
 export const STUDIO_GATEWAY_ADAPTER_TYPES = [
   "openclaw",
   "hermes",
@@ -47,6 +48,7 @@ export const STUDIO_GATEWAY_ADAPTER_TYPES = [
   "claw3d",
   "paperclip",
   "custom",
+  "webllm",
 ] as const;
 
 export type StudioGatewayProfile = {
@@ -947,7 +949,8 @@ const normalizeGatewayAdapterType = (
     adapterType === "openclaw" ||
     adapterType === "local" ||
     adapterType === "claw3d" ||
-    adapterType === "custom"
+    adapterType === "custom" ||
+    adapterType === "webllm"
   ) {
     return adapterType;
   }

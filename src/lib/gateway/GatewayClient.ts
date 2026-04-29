@@ -204,7 +204,8 @@ const normalizeLocalGatewayDefaults = (
     raw.adapterType === "local" ||
     raw.adapterType === "claw3d" ||
     raw.adapterType === "paperclip" ||
-    raw.adapterType === "custom"
+    raw.adapterType === "custom" ||
+    raw.adapterType === "webllm"
       ? raw.adapterType
       : "openclaw";
   const profiles = normalizeGatewayProfilesPublic(raw.profiles);

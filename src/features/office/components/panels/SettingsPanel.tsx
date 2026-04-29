@@ -91,7 +91,8 @@ export function SettingsPanel({
     selectedAdapterType === "local" ||
     selectedAdapterType === "claw3d" ||
     selectedAdapterType === "paperclip" ||
-    selectedAdapterType === "custom";
+    selectedAdapterType === "custom" ||
+    selectedAdapterType === "webllm";
   const [remoteOfficeTokenDraft, setRemoteOfficeTokenDraft] = useState("");
 
   return (
@@ -136,6 +137,7 @@ export function SettingsPanel({
         <div className="mt-3 flex flex-wrap gap-2">
           {(
             [
+              ["webllm", "On-Device"],
               ["demo", "Demo"],
               ["hermes", "Hermes"],
               ["local", "Local"],
