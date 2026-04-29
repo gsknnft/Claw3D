@@ -32,7 +32,10 @@ function OfficeLoadingFallback() {
 }
 
 export default function OfficePage() {
-  const showOpenClawConsole = readDebugFlag(process.env.DEBUG);
+  const showOpenClawConsole = readDebugFlag(
+    process.env.CLAW3D_AGENT_EVENT_CONSOLE ??
+      process.env.NEXT_PUBLIC_CLAW3D_AGENT_EVENT_CONSOLE,
+  );
 
   return (
     <AgentStoreProvider>

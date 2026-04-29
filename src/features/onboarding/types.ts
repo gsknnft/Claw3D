@@ -105,3 +105,22 @@ export const MANAGED_ONBOARDING_STEPS: OnboardingStep[] = [
     skippable: false,
   },
 ];
+
+// Default step list used by tests and single-tenant flows.
+export const ONBOARDING_STEPS = LOCAL_ONBOARDING_STEPS;
+
+export function getStepIndex(id: OnboardingStepId): number {
+  return ONBOARDING_STEPS.findIndex((s) => s.id === id);
+}
+
+export function getNextStep(id: OnboardingStepId): OnboardingStepId | null {
+  const idx = getStepIndex(id);
+  return idx >= 0 && idx < ONBOARDING_STEPS.length - 1
+    ? ONBOARDING_STEPS[idx + 1].id
+    : null;
+}
+
+export function getPrevStep(id: OnboardingStepId): OnboardingStepId | null {
+  const idx = getStepIndex(id);
+  return idx > 0 ? ONBOARDING_STEPS[idx - 1].id : null;
+}

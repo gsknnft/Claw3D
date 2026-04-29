@@ -80,6 +80,7 @@ import {
   listOfficeFloorsForProvider,
   resolveActiveOfficeFloorId,
   type FloorId,
+  type FloorProvider,
 } from "@/lib/office/floors";
 import {
   AgentEditorModal,
@@ -1156,6 +1157,52 @@ export function OfficeScreen({
     () => getOfficeFloor(resolveActiveOfficeFloorId(activeFloorId)),
     [activeFloorId],
   );
+  const activeFloorIsDemo =
+    activeFloor.kind === "lobby" && activeFloor.provider === "demo";
+
+  // Lobby is the stable starting point — hydrate the demo agent so it walks
+  // around while the app waits to connect, but never override the configured
+  // adapter type or kill an in-progress connection.  Auto-navigate away from
+  // the lobby fires separately once a real connection succeeds.
+  useEffect(() => {
+    if (!activeFloorIsDemo) return;
+
+    setPendingFloorRuntimeSwitch(null);
+    if (state.agents.length === 0) {
+      hydrateAgents([createDemoMainAgentSeed()], MAIN_AGENT_ID);
+      dispatch({ type: "selectAgent", agentId: MAIN_AGENT_ID });
+    }
+    if (!agentsLoaded) {
+      setAgentsLoaded(true);
+    }
+    setFloorRosterCache((previous) => {
+      const current = previous[activeFloor.id];
+      if (
+        current?.status === "loaded" &&
+        current.entries.some((entry) => entry.agentId === MAIN_AGENT_ID)
+      ) {
+        return previous;
+      }
+      return {
+        ...previous,
+        [activeFloor.id]: buildFloorRosterState({
+          floorId: activeFloor.id,
+          hydratedAt: Date.now(),
+          result: {
+            seeds: [createDemoMainAgentSeed()],
+            suggestedSelectedAgentId: MAIN_AGENT_ID,
+          },
+        }),
+      };
+    });
+  }, [
+    activeFloor.id,
+    activeFloorIsDemo,
+    agentsLoaded,
+    dispatch,
+    hydrateAgents,
+    state.agents.length,
+  ]);
 
   useEffect(() => {
     activeFloorIdRef.current = activeFloorId;
@@ -1380,7 +1427,9 @@ export function OfficeScreen({
     voiceId: voiceRepliesPreference.voiceId,
     speed: voiceRepliesPreference.speed,
   });
-  const showOnboardingWizard = showOnboarding || forceShowOnboarding;
+  const showOnboardingWizard =
+    forceShowOnboarding ||
+    (showOnboarding && !activeFloorIsDemo && state.agents.length === 0);
   const handleOpenOnboarding = useCallback(() => {
     resetOnboarding();
     setCompanyCreatedSignal(0);
@@ -1445,6 +1494,37 @@ export function OfficeScreen({
       settingsCoordinator.schedulePatch({ activeFloorId: resolved }, 0);
       setOfficeCameraCenterSignal((current) => current + 1);
 
+      if (floor.kind !== "runtime") {
+        setPendingFloorRuntimeSwitch(null);
+        if (status === "connected" || status === "connecting") {
+          disconnect();
+        }
+        if (floor.provider === "demo") {
+          setSelectedAdapterType("demo");
+          hydrateAgents([createDemoMainAgentSeed()], MAIN_AGENT_ID);
+          setAgentsLoaded(true);
+          focusLocalAgent(MAIN_AGENT_ID, {
+            openChat: false,
+            persistFloorId: resolved,
+            selectStore: true,
+          });
+          setFloorRosterCache((previous) => ({
+            ...previous,
+            [resolved]: buildFloorRosterState({
+              floorId: resolved,
+              hydratedAt: Date.now(),
+              result: {
+                seeds: [createDemoMainAgentSeed()],
+                suggestedSelectedAgentId: MAIN_AGENT_ID,
+              },
+            }),
+          }));
+          return;
+        }
+        setAgentsLoaded(true);
+        return;
+      }
+
       const adapterType = floor.provider as StudioGatewayAdapterType;
       let nextGatewayUrl = gatewayUrl.trim();
       let nextToken = token;
@@ -1455,30 +1535,35 @@ export function OfficeScreen({
             ? await settingsCoordinator.loadSettingsEnvelope({ maxAgeMs: 30_000 })
             : {
                 settings: await settingsCoordinator.loadSettings({ maxAgeMs: 30_000 }),
-                gatewayPrivate: null,
-                localGatewayDefaultsPrivate: null,
+                localGatewayDefaults: null,
               };
         const settings = envelope.settings ?? null;
-        const gateway = envelope.gatewayPrivate ?? null;
-        const gatewaySettings: StudioGatewaySettings | null = gateway
-          ? {
-              ...gateway,
-              profiles: {
-                ...(gateway.profiles ?? {}),
-                ...adapterProfiles,
-              },
-            }
-          : null;
+        // gatewayPrivate is not in the API response — use sanitized public settings + in-memory
+        // adapterProfiles (which may carry a URL from a previous successful connection).
+        const gatewaySettings: StudioGatewaySettings | null =
+          adapterProfiles && Object.keys(adapterProfiles).length > 0
+            ? ({ profiles: adapterProfiles } as StudioGatewaySettings)
+            : null;
         const { profiles } = resolveStudioGatewayProfiles({
           gateway: gatewaySettings,
-          localDefaults: envelope.localGatewayDefaultsPrivate ?? localGatewayDefaults,
+          localDefaults: localGatewayDefaults,
         });
         const floorRuntime = settings?.officeFloors?.[resolved];
         nextGatewayUrl =
           floorRuntime?.gatewayUrl?.trim() || profiles[adapterType]?.url?.trim() || nextGatewayUrl;
-        nextToken = profiles[adapterType]?.token ?? nextToken;
+        // Token is intentionally empty — the Studio proxy injects the server-side token.
+        nextToken = "";
       } catch (error) {
         console.error("Failed to resolve floor runtime profile.", error);
+      }
+
+      // Guard: if this is a runtime floor and there's no gateway URL to connect to,
+      // bail back to lobby rather than entering a connect-hang limbo state.
+      if (floor.kind === "runtime" && !nextGatewayUrl.trim()) {
+        setActiveFloorId("lobby");
+        settingsCoordinator.schedulePatch({ activeFloorId: "lobby" }, 0);
+        setAgentsLoaded(true);
+        return;
       }
 
       setSelectedAdapterType(adapterType);
@@ -1505,13 +1590,16 @@ export function OfficeScreen({
     },
     [
       adapterProfiles,
+      disconnect,
       focusLocalAgent,
       gatewayUrl,
+      hydrateAgents,
       localGatewayDefaults,
       setGatewayUrl,
       setToken,
       setSelectedAdapterType,
       settingsCoordinator,
+      status,
       token,
     ],
   );
@@ -1986,20 +2074,12 @@ export function OfficeScreen({
       if (status !== "connected") {
         throw new Error("Connect to a runtime before using the company builder.");
       }
-      let livePlannerAgent = resolveCompanyPlanningAgent({
+      const livePlannerAgent = resolveCompanyPlanningAgent({
         agents: stateRef.current.agents,
         preferredAgentId: selectedChatAgentId ?? state.selectedAgentId,
       });
       if (!livePlannerAgent) {
-        setCompanyBuilderStatusLine("Creating a bootstrap planner agent\u2026");
-        await createGatewayAgent({ client, name: "Planner" });
-        await loadAgents({ forceSettings: true });
-        livePlannerAgent = resolveCompanyPlanningAgent({
-          agents: stateRef.current.agents,
-        });
-        if (!livePlannerAgent) {
-          throw new Error("Failed to create a bootstrap planner agent.");
-        }
+        throw new Error("Create or load at least one agent before using AI suggestions.");
       }
       setCompanyBuilderStatusLine(statusText);
       return runOpenClawPlanningPrompt({
@@ -2011,7 +2091,7 @@ export function OfficeScreen({
         prompt,
       });
     },
-    [client, dispatch, loadAgents, selectedChatAgentId, state.selectedAgentId, status],
+    [client, dispatch, selectedChatAgentId, state.selectedAgentId, status],
   );
   const handleImproveCompanyBrief = useCallback(
     async (brief: string) => {
@@ -2752,7 +2832,7 @@ export function OfficeScreen({
       lastLoadAgentsStartedAtRef.current = 0;
       setLoading(false);
       if (stateRef.current.agents.length === 0) {
-        if (selectedAdapterType === "demo") {
+        if (activeFloorIsDemo || selectedAdapterType === "demo") {
           hydrateAgents([createDemoMainAgentSeed()], MAIN_AGENT_ID);
           setAgentsLoaded(true);
         } else {
@@ -2767,15 +2847,14 @@ export function OfficeScreen({
       prevAssistantPreviewRef.current = {};
       lastGatewayActivityAtRef.current = 0;
     }
-  }, [hydrateAgents, selectedAdapterType, setLoading, status]);
+  }, [activeFloorIsDemo, hydrateAgents, selectedAdapterType, setLoading, status]);
 
   useEffect(() => {
-    if (selectedAdapterType !== "demo") return;
-    if (status !== "disconnected") return;
+    if (!activeFloorIsDemo && selectedAdapterType !== "demo") return;
     if (state.agents.length > 0) return;
     hydrateAgents([createDemoMainAgentSeed()], MAIN_AGENT_ID);
     setAgentsLoaded(true);
-  }, [hydrateAgents, selectedAdapterType, state.agents.length, status]);
+  }, [activeFloorIsDemo, hydrateAgents, selectedAdapterType, state.agents.length]);
 
   useEffect(() => {
     if (!agentsLoaded) return;
@@ -4674,16 +4753,22 @@ export function OfficeScreen({
 
   const showGatewayLoadingOverlay =
     !agentsLoaded &&
+    !activeFloorIsDemo &&
+    selectedAdapterType !== "demo" &&
     (!connectPromptReady ||
       (gatewayUrl.trim().length > 0 &&
         !shouldPromptForConnect &&
         ((!didAttemptGatewayConnect && showDelayedGatewayLoadingOverlay) ||
           (status === "connecting" && showDelayedGatewayLoadingOverlay))));
+  // On the demo lobby the demo agent is already walking (agentsLoaded=true), so
+  // the !agentsLoaded gate alone would permanently suppress this overlay.  Allow
+  // it when we're in the lobby and there is a real reason to prompt (no saved
+  // connection, failed auto-connect, manual disconnect, etc.).
   const showGatewayConnectOverlay =
     connectPromptReady &&
     status === "disconnected" &&
-    !agentsLoaded &&
-    (shouldPromptForConnect || showDelayedGatewayConnectOverlay);
+    (shouldPromptForConnect || showDelayedGatewayConnectOverlay) &&
+    (!agentsLoaded || activeFloorIsDemo);
 
   const runningCount = state.agents.filter(
     (agent) =>
@@ -4736,7 +4821,13 @@ export function OfficeScreen({
               showApprovalHint={didAttemptGatewayConnect}
               onGatewayUrlChange={setGatewayUrl}
               onTokenChange={setToken}
-              onAdapterTypeChange={setSelectedAdapterType}
+              onAdapterTypeChange={(adapterType) => {
+                setSelectedAdapterType(adapterType);
+                if (adapterType === "demo") {
+                  setActiveFloorId("lobby");
+                  settingsCoordinator.schedulePatch({ activeFloorId: "lobby" }, 0);
+                }
+              }}
               onUseLocalDefaults={useLocalGatewayDefaults}
               onConnect={() => void connect()}
             />
@@ -4749,6 +4840,7 @@ export function OfficeScreen({
         onSelectFloor={(floorId) => {
           void handleSelectFloor(floorId);
         }}
+        activeAdapterType={(selectedAdapterType as FloorProvider) ?? null}
       />
       <section className="relative h-full min-h-0 min-w-0 overflow-hidden">
         <RetroOffice3D
@@ -4768,7 +4860,7 @@ export function OfficeScreen({
           monitorAgentId={monitorAgentId}
           monitorByAgentId={monitorByAgentId}
           githubSkill={githubSkill}
-          taskManagerEnabled={taskManagerReady}
+          taskManagerEnabled={true}
           soundclawEnabled={soundclawReady}
           officeTitle={officeTitle}
           officeTitleLoaded={officeTitleLoaded}
@@ -4871,7 +4963,8 @@ export function OfficeScreen({
             setJukeboxOpen(true);
           }}
           onKanbanInteract={() => {
-            setKanbanInstallPromptOpen(true);
+            setActiveSidebarTab("kanban");
+            setSidebarOpen(true);
           }}
           taskBoardAgents={state.agents}
           taskBoardCardsByStatus={taskBoard.cardsByStatus}
@@ -5082,19 +5175,85 @@ export function OfficeScreen({
                 taskBoard.sharedTasksError ?? taskBoard.gatewayTasksError ?? taskBoard.cronError
               }
               taskCaptureDebug={showOpenClawConsole ? taskBoard.taskCaptureDebug : undefined}
-              onCreateCard={() => {
+              logEntries={showOpenClawConsole ? openClawLogEntries : undefined}
+              taskManagerReady={taskManagerReady}
+              taskManagerInstalling={kanbanInstallProgress.active}
+              taskManagerInstallProgressPercent={kanbanInstallProgress.percent}
+              taskManagerInstallProgressMessage={kanbanInstallProgress.message}
+              taskManagerInstallError={kanbanInstallProgress.error}
+              taskManagerInstallAvailable={runtimeSupportsSkills && status === "connected"}
+              taskManagerInstallUnavailableReason={
+                status !== "connected"
+                  ? "Connect to a runtime before installing TASK-MANAGER."
+                  : selectedAdapterType === "demo" || activeFloorIsDemo
+                    ? "Demo seeds local agents, but the demo runtime does not implement skill installation."
+                  : runtimeSupportsSkills
+                    ? null
+                    : "The current runtime does not expose skill installs."
+              }
+              onInstallTaskManagerAction={() => {
+                const targetAgentId =
+                  (selectedChatAgentId ?? state.selectedAgentId ?? state.agents[0]?.agentId ?? "")
+                    .trim() || null;
+                setKanbanInstallProgress({
+                  active: true,
+                  percent: 8,
+                  message: "Starting task-manager installation.",
+                  error: null,
+                });
+                void (async () => {
+                  try {
+                    await marketplace.handleInstallPackagedSkillAndEnable({
+                      skillKey: "task-manager",
+                      agentId: targetAgentId,
+                      onProgress: ({ percent, message }) => {
+                        setKanbanInstallProgress({
+                          active: true,
+                          percent,
+                          message,
+                          error: null,
+                        });
+                      },
+                    });
+                    setKanbanInstallProgress({
+                      active: true,
+                      percent: 100,
+                      message: "Refreshing task-manager state in Claw3D.",
+                      error: null,
+                    });
+                    setKanbanInstallPromptOpen(false);
+                    setKanbanInstallProgress({
+                      active: false,
+                      percent: 0,
+                      message: "",
+                      error: null,
+                    });
+                  } catch (error) {
+                    setKanbanInstallProgress((current) => ({
+                      ...current,
+                      active: false,
+                      error:
+                        error instanceof Error
+                          ? error.message
+                          : "Failed to install task-manager.",
+                    }));
+                  }
+                })();
+              }}
+              onCreateCardAction={() => {
                 taskBoard.createManualCard();
                 setActiveSidebarTab("kanban");
               }}
-              onMoveCard={taskBoard.moveCard}
-              onSelectCard={taskBoard.selectCard}
-              onUpdateCard={taskBoard.updateCard}
-              onDeleteCard={taskBoard.removeCard}
-              onRefreshCronJobs={() => {
+              onMoveCardAction={taskBoard.moveCard}
+              onSelectCardAction={taskBoard.selectCard}
+              onUpdateCardAction={taskBoard.updateCard}
+              onDeleteCardAction={taskBoard.removeCard}
+              onRefreshCronJobsAction={() => {
                 void taskBoard.refreshSharedTasks();
                 void taskBoard.refreshRemoteTasks();
                 void taskBoard.refreshCronJobs();
               }}
+              onClearLogsAction={handleClearOpenClawConsole}
             />
           }
           playbooksPanel={

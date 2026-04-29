@@ -547,6 +547,23 @@ const requiresDeviceIdentityHint =
 
 const isGatewayProtocolMismatchError = (error: GatewayResponseError) => {
   if (error.code.trim().toUpperCase() !== "INVALID_REQUEST") return false;
+  // The gateway may provide a structured details.code alongside the
+  // generic INVALID_REQUEST. Known non-protocol rejection codes must
+  // not surface the "possible protocol mismatch" hint, since it
+  // misleads operators whose real problem is origin allowlist, missing
+  // device identity, or upstream policy.
+  const details = error.details;
+  if (details && typeof details === "object") {
+    const code = (details as { code?: unknown }).code;
+    if (typeof code === "string") {
+      const NON_PROTOCOL_DETAIL_CODES = new Set([
+        "CONTROL_UI_ORIGIN_NOT_ALLOWED",
+        "CONTROL_UI_DEVICE_IDENTITY_REQUIRED",
+        "UPSTREAM_NOT_ALLOWED",
+      ]);
+      if (NON_PROTOCOL_DETAIL_CODES.has(code)) return false;
+    }
+  }
   const message = error.message.trim();
   if (!message) return false;
   return /minProtocol|maxProtocol/i.test(message);
@@ -576,7 +593,12 @@ const formatGatewayError = (error: unknown) => {
   }
   if (error instanceof Error) {
     if (/timed out connecting to the gateway/i.test(error.message)) {
-      return `${error.message} If you are testing locally, an older OpenClaw build may be speaking an incompatible protocol. Try upgrading OpenClaw, using the Hermes adapter, or running \`npm run demo-gateway\`.`;
+      // A local timeout carries no information about why the upstream did
+      // not respond. Suggest the directions the operator can actually check,
+      // without biasing toward a protocol mismatch — that is only one of
+      // several possible root causes (network, origin allowlist, upstream
+      // policy, credentials, nginx idle timeout, ...).
+      return `${error.message} Verify that the gateway is reachable at the configured URL, that origin and credentials meet the gateway's requirements, and (if testing locally with a self-built gateway) consider \`npm run demo-gateway\` to isolate the problem.`;
     }
     return error.message;
   }
@@ -725,7 +747,7 @@ export const useGatewayConnection = (
       setSelectedAdapterTypeState(value);
       const profile =
         adapterProfiles[value] ?? resolveDefaultStudioGatewayProfile(value, localGatewayDefaults);
-      setGatewayUrl(profile.url);
+      setGatewayUrl(profile.url ?? "");
       // Prefer the token from the initial private settings load when the in-memory
       // profile has an empty token (e.g. the profile was populated from the sanitized
       // public API response which strips real token values).
@@ -757,23 +779,25 @@ export const useGatewayConnection = (
                 localGatewayDefaultsPrivate: null,
               };
         const settings = envelope.settings ?? null;
-        const gateway = envelope.gatewayPrivate ?? null;
+        // gatewayPrivate is no longer sent by the server — upstream tokens must not
+        // cross the browser API boundary. The Studio proxy injects tokens server-side.
+        // We derive profiles from the sanitized public settings only.
         if (cancelled) return;
         const normalizedDefaults = normalizeLocalGatewayDefaults(
-          envelope.localGatewayDefaultsPrivate ?? envelope.localGatewayDefaults,
+          envelope.localGatewayDefaults,
         );
         setLocalGatewayDefaults(normalizedDefaults);
-        const gatewaySettings: StudioGatewaySettings | null = gateway;
+        const gatewaySettings = settings?.gateway ?? null;
         const resolvedGatewayProfiles = resolveStudioGatewayProfiles({
-          gateway: gatewaySettings,
+          gateway: gatewaySettings as StudioGatewaySettings | null,
           localDefaults: normalizedDefaults,
         });
         const nextAdapterType = resolvedGatewayProfiles.selectedAdapterType;
         const selectedProfile =
           resolvedGatewayProfiles.activeProfile ??
           resolveDefaultStudioGatewayProfile(nextAdapterType, normalizedDefaults);
-        const nextGatewayUrl = selectedProfile.url;
-        const nextToken = selectedProfile.token;
+        const nextGatewayUrl = selectedProfile.url ?? "";
+        const nextToken = selectedProfile.token ?? "";
         loadedGatewaySettings.current = {
           gatewayUrl: nextGatewayUrl.trim(),
           token: nextToken,
@@ -945,7 +969,7 @@ export const useGatewayConnection = (
         gateway: {
           lastKnownGood: {
             url: gatewayUrl.trim(),
-            token,
+            token: token || undefined,
             adapterType: nextDetectedAdapterType,
           },
         },
@@ -1050,11 +1074,12 @@ export const useGatewayConnection = (
   useEffect(() => {
     if (!settingsLoaded) return;
     setAdapterProfiles((current) => {
-      const nextProfile = {
-        url: gatewayUrl.trim(),
-        token,
-      };
       const existing = current[selectedAdapterType];
+      // Never overwrite a stored token with an empty string — the Studio proxy
+      // injects the real token server-side; an empty token in UI state means
+      // "let the proxy handle it", not "clear the saved token".
+      const nextToken = token || existing?.token || "";
+      const nextProfile = { url: gatewayUrl.trim(), token: nextToken };
       if (
         existing &&
         existing.url === nextProfile.url &&
@@ -1074,11 +1099,15 @@ export const useGatewayConnection = (
     const baseline = loadedGatewaySettings.current;
     if (!baseline) return;
     const nextGatewayUrl = gatewayUrl.trim();
+    // Use undefined for the token in the patch when the in-memory token is empty so
+    // that mergeGatewaySettings / mergeGatewayProfiles treats it as "leave unchanged"
+    // rather than overwriting the persisted token with an empty string.
+    const persistToken = token || undefined;
     const nextProfiles = {
       ...adapterProfiles,
       [selectedAdapterType]: {
         url: nextGatewayUrl,
-        token,
+        token: persistToken,
       },
     };
     if (
@@ -1093,7 +1122,7 @@ export const useGatewayConnection = (
       {
         gateway: {
           url: nextGatewayUrl,
-          token,
+          token: persistToken,
           adapterType: selectedAdapterType,
           profiles: nextProfiles,
         },
@@ -1106,13 +1135,13 @@ export const useGatewayConnection = (
     if (!localGatewayDefaults) {
       return;
     }
-    setGatewayUrl(localGatewayDefaults.url);
-    setToken(localGatewayDefaults.token);
+    setGatewayUrl(localGatewayDefaults.url ?? "");
+    setToken(localGatewayDefaults.token ?? "");
     setAdapterProfiles((current) => ({
       ...current,
       [localGatewayDefaults.adapterType]: {
-        url: localGatewayDefaults.url,
-        token: localGatewayDefaults.token,
+        url: localGatewayDefaults.url ?? "",
+        token: localGatewayDefaults.token ?? "",
       },
     }));
     setSelectedAdapterTypeState(localGatewayDefaults.adapterType);
@@ -1162,8 +1191,8 @@ export const useGatewayConnection = (
       selectedAdapterType === "local" ||
       selectedAdapterType === "claw3d" ||
       !hasLastKnownGoodState ||
-      !gatewayUrl.trim() ||
-      (selectedAdapterType === "openclaw" && !token.trim()) ||
+      !(gatewayUrl ?? "").trim() ||
+      (selectedAdapterType === "openclaw" && !(token ?? "").trim()) ||
       wasManualDisconnectRef.current ||
       Boolean(error));
 

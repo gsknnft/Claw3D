@@ -141,6 +141,7 @@ const MAX_DESCRIPTION_LENGTH = 5_000;
 const MAX_NOTE_LENGTH = 2_000;
 const MAX_NOTES_COUNT = 50;
 const MAX_TASKS = 500;
+const MAX_HISTORY_ENTRIES = 100;
 
 const writeStore = (store: SharedTaskStore) => {
   const storePath = resolveStorePath();
@@ -177,7 +178,7 @@ const appendHistory = (
       },
     ];
   }
-  const prior = existing.history ?? [];
+  const prior = (existing.history ?? []).slice(-MAX_HISTORY_ENTRIES + 1);
   if (existing.isArchived !== next.isArchived && next.isArchived) {
     return [
       ...prior,

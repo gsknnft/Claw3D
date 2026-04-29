@@ -1835,7 +1835,7 @@ function PlayerFirstPersonCam({
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
-      set({ camera: originalCamRef.current });
+      set({ camera: originalCamRef.current as THREE.PerspectiveCamera });
     };
   }, [onExit, playerRef, set, size]);
 

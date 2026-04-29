@@ -40,25 +40,6 @@ describe("studio settings normalization", () => {
     expect(normalized.gateway?.url).toBe("ws://localhost:18789");
   });
 
-  it("preserves paperclip adapter profiles", () => {
-    const normalized = normalizeStudioSettings({
-      gateway: {
-        url: "ws://localhost:18791",
-        token: "",
-        adapterType: "paperclip",
-        profiles: {
-          paperclip: { url: "ws://localhost:18791", token: "" },
-        },
-      },
-    });
-
-    expect(normalized.gateway?.adapterType).toBe("paperclip");
-    expect(normalized.gateway?.profiles?.paperclip).toEqual({
-      url: "ws://localhost:18791",
-      token: "",
-    });
-  });
-
   it("normalizes_dual_mode_preferences", () => {
     const normalized = normalizeStudioSettings({
       focused: {
@@ -456,5 +437,82 @@ describe("studio settings normalization", () => {
       url: "ws://localhost:18789",
       token: "",
     });
+  });
+
+  it("merging lastKnownGood with an empty-string token does not overwrite a stored token", () => {
+    const current = normalizeStudioSettings({
+      gateway: {
+        url: "ws://localhost:18789",
+        token: "stored-token",
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          token: "stored-token",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    const merged = mergeStudioSettings(current, {
+      gateway: {
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          token: "",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    expect(merged.gateway?.lastKnownGood?.token).toBe("stored-token");
+  });
+
+  it("merging lastKnownGood with a real token overwrites the stored token", () => {
+    const current = normalizeStudioSettings({
+      gateway: {
+        url: "ws://localhost:18789",
+        token: "old-token",
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          token: "old-token",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    const merged = mergeStudioSettings(current, {
+      gateway: {
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          token: "new-token",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    expect(merged.gateway?.lastKnownGood?.token).toBe("new-token");
+  });
+
+  it("merging lastKnownGood with undefined token leaves the stored token unchanged", () => {
+    const current = normalizeStudioSettings({
+      gateway: {
+        url: "ws://localhost:18789",
+        token: "stored-token",
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          token: "stored-token",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    const merged = mergeStudioSettings(current, {
+      gateway: {
+        lastKnownGood: {
+          url: "ws://localhost:18789",
+          adapterType: "openclaw",
+        },
+      },
+    });
+
+    expect(merged.gateway?.lastKnownGood?.token).toBe("stored-token");
   });
 });

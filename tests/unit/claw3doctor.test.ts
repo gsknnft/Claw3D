@@ -170,6 +170,32 @@ describe("claw3doctor core", () => {
     );
   });
 
+  it("treats only real ts.net suffixes as tailnet hosts", () => {
+    expect(
+      buildGatewayFailureActions({
+        adapterType: "openclaw",
+        message: "Unexpected HTTP 401 during WebSocket upgrade",
+        gatewayUrl: "wss://demo.tailnet.ts.net/gateway",
+      }),
+    ).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Tailnet-hosted"),
+      ]),
+    );
+
+    expect(
+      buildGatewayFailureActions({
+        adapterType: "openclaw",
+        message: "Unexpected HTTP 401 during WebSocket upgrade",
+        gatewayUrl: "wss://evilts.net/gateway",
+      }),
+    ).not.toEqual(
+      expect.arrayContaining([
+        expect.stringContaining("Tailnet-hosted"),
+      ]),
+    );
+  });
+
   it("classifies common gateway failure signatures", () => {
     expect(
       classifyGatewayFailure({

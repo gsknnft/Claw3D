@@ -1,3 +1,8 @@
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
+
 const securityHeaders = [
   {
     key: "Content-Security-Policy",
@@ -9,7 +14,14 @@ const securityHeaders = [
       "img-src 'self' data: blob: http: https:",
       "font-src 'self' data: https:",
       "style-src 'self' 'unsafe-inline' https:",
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:",
+      // 'unsafe-eval' is required by Next.js dev mode (source maps, HMR).
+      // In production it is dropped — React and Three.js do not need eval.
+      ...(process.env.NODE_ENV !== "production"
+        ? ["script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:"]
+        : ["script-src 'self' 'unsafe-inline' blob:"]),
+      // connect-src is intentionally broad: gateway URLs are user-configured
+      // at runtime and cannot be enumerated at build time.
+      // Restrict further when a fixed deployment target is known.
       "connect-src 'self' ws: wss: http: https:",
       "media-src 'self' blob: data: http: https:",
       "worker-src 'self' blob:",
@@ -48,6 +60,9 @@ if (process.env.NODE_ENV === "production") {
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  turbopack: {
+    root: path.resolve(__dirname),
+  },
   async headers() {
     return [
       {

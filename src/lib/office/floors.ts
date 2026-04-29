@@ -1,10 +1,10 @@
 export type FloorProvider =
   | "openclaw"
   | "hermes"
+  | "paperclip"
   | "custom"
   | "demo"
   | "local"
-  | "paperclip"
   | "claw3d";
 export type FloorZone = "building" | "outside";
 
@@ -162,6 +162,33 @@ export const resolveActiveOfficeFloorId = (floorId: FloorId | null | undefined):
   }
   return listEnabledOfficeFloors()[0]?.id ?? DEFAULT_ACTIVE_FLOOR_ID;
 };
+
+/**
+ * Floors visible in the nav for a given active adapter.
+ * - Lobby (kind="lobby") always shown.
+ * - Runtime floors shown only when their provider matches the active adapter.
+ * - Non-runtime enabled floors (training, market, campus) always shown.
+ *
+ * When activeAdapterType is null/undefined/"demo", only lobby + non-runtime floors appear.
+ */
+export const listAvailableFloorsForAdapter = (
+  activeAdapterType: FloorProvider | "demo" | null | undefined,
+): FloorDefinition[] => {
+  return OFFICE_FLOORS.filter((floor) => {
+    if (!floor.enabled) return false;
+    if (floor.kind === "lobby") return true;
+    if (floor.kind === "runtime") {
+      return (
+        Boolean(activeAdapterType) &&
+        activeAdapterType !== "demo" &&
+        floor.provider === activeAdapterType
+      );
+    }
+    // training / market / campus
+    return true;
+  });
+};
+
 
 export const getAdjacentEnabledOfficeFloorId = (
   floorId: FloorId,
