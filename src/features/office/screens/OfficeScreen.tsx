@@ -1160,16 +1160,14 @@ export function OfficeScreen({
   const activeFloorIsDemo =
     activeFloor.kind === "lobby" && activeFloor.provider === "demo";
 
+  // Lobby is the stable starting point — hydrate the demo agent so it walks
+  // around while the app waits to connect, but never override the configured
+  // adapter type or kill an in-progress connection.  Auto-navigate away from
+  // the lobby fires separately once a real connection succeeds.
   useEffect(() => {
     if (!activeFloorIsDemo) return;
 
     setPendingFloorRuntimeSwitch(null);
-    if (selectedAdapterType !== "demo") {
-      setSelectedAdapterType("demo");
-    }
-    if (status === "connected" || status === "connecting") {
-      disconnect();
-    }
     if (state.agents.length === 0) {
       hydrateAgents([createDemoMainAgentSeed()], MAIN_AGENT_ID);
       dispatch({ type: "selectAgent", agentId: MAIN_AGENT_ID });
@@ -1201,13 +1199,9 @@ export function OfficeScreen({
     activeFloor.id,
     activeFloorIsDemo,
     agentsLoaded,
-    disconnect,
     dispatch,
     hydrateAgents,
-    selectedAdapterType,
-    setSelectedAdapterType,
     state.agents.length,
-    status,
   ]);
 
   useEffect(() => {
@@ -4766,12 +4760,15 @@ export function OfficeScreen({
         !shouldPromptForConnect &&
         ((!didAttemptGatewayConnect && showDelayedGatewayLoadingOverlay) ||
           (status === "connecting" && showDelayedGatewayLoadingOverlay))));
+  // On the demo lobby the demo agent is already walking (agentsLoaded=true), so
+  // the !agentsLoaded gate alone would permanently suppress this overlay.  Allow
+  // it when we're in the lobby and there is a real reason to prompt (no saved
+  // connection, failed auto-connect, manual disconnect, etc.).
   const showGatewayConnectOverlay =
     connectPromptReady &&
     status === "disconnected" &&
-    !agentsLoaded &&
-    !activeFloorIsDemo &&
-    (shouldPromptForConnect || showDelayedGatewayConnectOverlay);
+    (shouldPromptForConnect || showDelayedGatewayConnectOverlay) &&
+    (!agentsLoaded || activeFloorIsDemo);
 
   const runningCount = state.agents.filter(
     (agent) =>
