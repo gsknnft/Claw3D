@@ -1,3 +1,5 @@
+"use client"
+
 import { Suspense } from "react";
 import dynamic from "next/dynamic";
 import { RunningAvatarLoader } from "@/features/agents/components/RunningAvatarLoader";
