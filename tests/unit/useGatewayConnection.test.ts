@@ -83,17 +83,18 @@ const setupAndImportHook = async (gatewayUrl: string | null) => {
     }) => {
       gatewayUrl: string;
       token: string;
-      selectedAdapterType: "openclaw" | "hermes" | "demo" | "paperclip" | "custom";
-      detectedAdapterType: "openclaw" | "hermes" | "demo" | "paperclip" | "custom" | null;
-      activeAdapterType: "openclaw" | "hermes" | "demo" | "paperclip" | "custom";
+      status: "disconnected" | "connecting" | "connected";
+      selectedAdapterType: "openclaw" | "hermes" | "demo" | "paperclip" | "custom" | "webllm";
+      detectedAdapterType: "openclaw" | "hermes" | "demo" | "paperclip" | "custom" | "webllm" | null;
+      activeAdapterType: "openclaw" | "hermes" | "demo" | "paperclip" | "custom" | "webllm";
       localGatewayDefaults: {
         url: string;
         token: string;
-        adapterType: "openclaw" | "hermes" | "demo" | "paperclip" | "custom";
+        adapterType: "openclaw" | "hermes" | "demo" | "paperclip" | "custom" | "webllm";
       } | null;
       shouldPromptForConnect: boolean;
       useLocalGatewayDefaults: () => void;
-      setSelectedAdapterType: (value: "openclaw" | "hermes" | "demo" | "paperclip" | "custom") => void;
+      setSelectedAdapterType: (value: "openclaw" | "hermes" | "demo" | "paperclip" | "custom" | "webllm") => void;
       connect: () => Promise<void>;
     },
     captured,
@@ -350,6 +351,7 @@ describe("useGatewayConnection", () => {
     expect(mod.resolveInitialGatewayAutoConnectDelayMs("hermes")).toBe(900);
     expect(mod.resolveInitialGatewayAutoConnectDelayMs("demo")).toBe(900);
     expect(mod.resolveInitialGatewayAutoConnectDelayMs("paperclip")).toBe(900);
+    expect(mod.resolveInitialGatewayAutoConnectDelayMs("webllm")).toBe(0);
   });
 
   it("retries_only_the_first_connect_for_hermes_and_demo", async () => {
@@ -363,6 +365,7 @@ describe("useGatewayConnection", () => {
     expect(mod.resolveInitialGatewayConnectAttemptCount("demo", true)).toBe(2);
     expect(mod.resolveInitialGatewayConnectAttemptCount("paperclip", true)).toBe(2);
     expect(mod.resolveInitialGatewayConnectAttemptCount("openclaw", true)).toBe(1);
+    expect(mod.resolveInitialGatewayConnectAttemptCount("webllm", false)).toBe(1);
   });
 
   it("uses_control_ui_client_id_for_openclaw_connections", async () => {
@@ -669,6 +672,89 @@ describe("useGatewayConnection", () => {
     expect(screen.getByTestId("selectedAdapterType")).toHaveTextContent("custom");
     expect(screen.getByTestId("activeAdapterType")).toHaveTextContent("custom");
     expect(screen.getByTestId("shouldPromptForConnect")).toHaveTextContent("yes");
+  });
+
+  it("connects_webllm_without_gateway_url_or_token", async () => {
+    const { useGatewayConnection, captured } = await setupAndImportHook(null);
+    const patches: unknown[] = [];
+    const coordinator = {
+      loadSettingsEnvelope: async () => ({
+        settings: {
+          version: 1,
+          gateway: {
+            url: "",
+            token: "",
+            adapterType: "webllm",
+          },
+          focused: {},
+          avatars: {},
+          analytics: {},
+          voiceReplies: {},
+          office: {},
+          deskAssignments: {},
+          standup: {},
+          taskBoard: {},
+        },
+        localGatewayDefaults: null,
+      }),
+      loadSettings: async () => null,
+      schedulePatch: (patch: unknown) => {
+        patches.push(patch);
+      },
+      flushPending: async () => {},
+    };
+
+    const Probe = () => {
+      const state = useGatewayConnection(coordinator);
+      return createElement(
+        "div",
+        null,
+        createElement("div", { "data-testid": "selectedAdapterType" }, state.selectedAdapterType),
+        createElement("div", { "data-testid": "activeAdapterType" }, state.activeAdapterType),
+        createElement("div", { "data-testid": "status" }, state.status),
+        createElement(
+          "div",
+          { "data-testid": "shouldPromptForConnect" },
+          state.shouldPromptForConnect ? "yes" : "no",
+        ),
+        createElement(
+          "button",
+          {
+            type: "button",
+            "data-testid": "connect",
+            onClick: () => {
+              void state.connect();
+            },
+          },
+          "connect",
+        ),
+      );
+    };
+
+    render(createElement(Probe));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("selectedAdapterType")).toHaveTextContent("webllm");
+    });
+    expect(screen.getByTestId("shouldPromptForConnect")).toHaveTextContent("no");
+    expect(captured.url).toBeNull();
+
+    fireEvent.click(screen.getByTestId("connect"));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("status")).toHaveTextContent("connected");
+    });
+    expect(screen.getByTestId("activeAdapterType")).toHaveTextContent("webllm");
+    expect(captured.url).toBeNull();
+    expect(patches).toContainEqual({
+      gateway: {
+        lastKnownGood: {
+          url: "",
+          token: undefined,
+          adapterType: "webllm",
+        },
+      },
+    });
   });
 
   it("still_prompts_to_reconnect_for_custom_with_last_known_good_state", async () => {

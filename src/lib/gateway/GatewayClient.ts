@@ -127,28 +127,22 @@ const DEFAULT_UPSTREAM_GATEWAY_URL =
 const INITIAL_AUTO_CONNECT_DELAY_MS = 900;
 const INITIAL_CONNECT_RETRY_DELAY_MS = 1_200;
 const OPENCLAW_CONTROL_UI_CLIENT_ID = "openclaw-control-ui";
-const OPENCLAW_WEBCHAT_UI_CLIENT_ID = "webchat-ui";
 
 const isAutoManagedAdapter = (adapterType: StudioGatewayAdapterType) =>
   adapterType === "openclaw" ||
   adapterType === "hermes" ||
-  adapterType === "demo";
+  adapterType === "demo" ||
+  adapterType === "webllm";
 
 export const resolveGatewayClientName = (
   adapterType: StudioGatewayAdapterType,
-  gatewayUrl: string,
+  _gatewayUrl: string,
 ) => {
-  if (adapterType !== "openclaw") {
-    return OPENCLAW_CONTROL_UI_CLIENT_ID;
-  }
-  // On native we always connect directly (no server proxy), so always
-  // identify as a control UI regardless of the gateway's network address.
-  const isNative =
-    typeof window !== "undefined" && !!(window as any).Capacitor?.isNative;
-  if (isNative) return OPENCLAW_CONTROL_UI_CLIENT_ID;
-  return isLocalGatewayUrl(gatewayUrl)
-    ? OPENCLAW_CONTROL_UI_CLIENT_ID
-    : OPENCLAW_WEBCHAT_UI_CLIENT_ID;
+  void adapterType;
+  // Studio is an operator/control surface. Even when the upstream OpenClaw
+  // gateway is remote, the browser connects through the Studio proxy and
+  // should identify as a control UI, not as a public webchat client.
+  return OPENCLAW_CONTROL_UI_CLIENT_ID;
 };
 
 export const resolveInitialGatewayAutoConnectDelayMs = (
@@ -242,6 +236,7 @@ const normalizeGatewayProfilesPublic = (
     "claw3d",
     "paperclip",
     "custom",
+    "webllm",
   ] as const) {
     const profile = normalizeGatewayProfilePublic(raw[adapterType]);
     if (profile) {
@@ -942,6 +937,41 @@ export const useGatewayConnection = (
     setConnectErrorCode(null);
     retryAttemptRef.current = 0;
     wasManualDisconnectRef.current = false;
+    if (selectedAdapterType === "webllm") {
+      setStatus("connecting");
+      try {
+        await settingsCoordinator.flushPending();
+        setDetectedAdapterType("webllm");
+        setHasLastKnownGoodState(true);
+        setStatus("connected");
+        setConnectErrorCode(null);
+        settingsCoordinator.schedulePatch(
+          {
+            gateway: {
+              lastKnownGood: {
+                url: gatewayUrl.trim(),
+                token: token || undefined,
+                adapterType: "webllm",
+              },
+            },
+          },
+          0,
+        );
+        gatewayDebugLog("connect:webllm-success", {
+          selectedAdapterType,
+        });
+      } catch (err) {
+        setStatus("disconnected");
+        setDetectedAdapterType(null);
+        setConnectErrorCode("studio.webllm_connect_failed");
+        setError(formatGatewayError(err));
+        gatewayDebugLog("connect:webllm-failed", {
+          selectedAdapterType,
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+      return;
+    }
     if (
       selectedAdapterType === "custom" ||
       selectedAdapterType === "local" ||
@@ -992,7 +1022,9 @@ export const useGatewayConnection = (
               selectedAdapterType,
               gatewayUrl,
             ),
-            disableDeviceAuth: selectedAdapterType !== "openclaw",
+            disableDeviceAuth:
+              selectedAdapterType !== "openclaw" ||
+              !isLocalGatewayUrl(gatewayUrl),
           });
           lastError = null;
           break;
@@ -1064,9 +1096,11 @@ export const useGatewayConnection = (
   useEffect(() => {
     if (didAutoConnect.current) return;
     if (!settingsLoaded) return;
-    if (!hasLastKnownGoodState) return;
-    if (!gatewayUrl.trim()) return;
     if (!isAutoManagedAdapter(selectedAdapterType)) return;
+    if (selectedAdapterType !== "webllm") {
+      if (!hasLastKnownGoodState) return;
+      if (!gatewayUrl.trim()) return;
+    }
     didAutoConnect.current = true;
     const delayMs =
       resolveInitialGatewayAutoConnectDelayMs(selectedAdapterType);
@@ -1285,8 +1319,8 @@ export const useGatewayConnection = (
     (selectedAdapterType === "custom" ||
       selectedAdapterType === "local" ||
       selectedAdapterType === "claw3d" ||
-      !hasLastKnownGoodState ||
-      !(gatewayUrl ?? "").trim() ||
+      (selectedAdapterType !== "webllm" && !hasLastKnownGoodState) ||
+      (selectedAdapterType !== "webllm" && !(gatewayUrl ?? "").trim()) ||
       (selectedAdapterType === "openclaw" && !(token ?? "").trim()) ||
       wasManualDisconnectRef.current ||
       Boolean(error));

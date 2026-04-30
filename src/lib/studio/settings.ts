@@ -977,6 +977,8 @@ export const resolveDefaultStudioGatewayProfile = (
   }
 
   switch (adapterType) {
+    case "webllm":
+      return { url: "", token: "" };
     case "claw3d":
       return { url: DEFAULT_CLAW3D_RUNTIME_URL, token: "" };
     case "local":

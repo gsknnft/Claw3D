@@ -7,6 +7,22 @@ export type ProgressCallback = (progress: { text: string; progress: number }) =>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type MLCEngine = any;
 
+type WebLLMModule = {
+  CreateMLCEngine: (
+    modelId: string,
+    options?: {
+      initProgressCallback?: (info: { text: string; progress: number }) => void;
+    }
+  ) => Promise<MLCEngine>;
+};
+
+declare global {
+  // Optional injection point for test/dev builds that intentionally bundle MLC.
+  // Claw3D itself does not depend on @mlc-ai/web-llm.
+  // eslint-disable-next-line no-var
+  var __CLAW3D_WEBLLM_MODULE__: WebLLMModule | undefined;
+}
+
 let _engine: MLCEngine | null = null;
 let _loadedModelId: string | null = null;
 let _status: EngineStatus = "idle";
@@ -26,6 +42,15 @@ export function onEngineStatus(handler: (s: EngineStatus) => void): () => void {
   return () => _statusHandlers.delete(handler);
 }
 
+async function loadWebLLMModule(): Promise<WebLLMModule> {
+  const injected = globalThis.__CLAW3D_WEBLLM_MODULE__;
+  if (injected?.CreateMLCEngine) return injected;
+
+  throw new Error(
+    "WebLLM runtime is not bundled in this Claw3D build. Use Demo, Hermes, OpenClaw, or a local gateway runtime.",
+  );
+}
+
 export async function ensureEngine(
   modelId?: string,
   onProgress?: ProgressCallback
@@ -38,7 +63,7 @@ export async function ensureEngine(
 
   notifyStatus("loading");
   try {
-    const { CreateMLCEngine } = await import("@mlc-ai/web-llm");
+    const { CreateMLCEngine } = await loadWebLLMModule();
     _engine = await CreateMLCEngine(targetModel, {
       initProgressCallback: (info: { text: string; progress: number }) => {
         onProgress?.(info);
